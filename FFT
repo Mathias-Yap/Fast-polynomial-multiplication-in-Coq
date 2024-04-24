@@ -1,0 +1,54 @@
+From VerifiedCalculus Require Export PolynomialModels.
+Require Export Reals.
+Require Export Coq.Arith.Even.
+Context `{F : Type} `{FltF : Float F}.
+Open Scope R_scope.
+Definition i := sqrt(-1).
+
+Definition nth_unit_root(n:nat) :=
+  cos((2*PI)/n) + i * sin ((2*PI)/n).
+
+Fixpoint even (n:nat) : bool :=
+  match n with
+  | O => true
+  | S O => false
+  | S (S n') => even n'
+  end.
+
+Fixpoint odd(n:nat) : bool :=
+ match n with
+ | O => false
+ | S O => true
+ | S(S n') => odd n'
+end.
+
+Lemma even_or_odd: forall n, even n = true \/ odd n = true.
+Proof. intros n. induction n.
+- auto.
+- 
+
+Fixpoint even_poly(p:list(nat*F)): list(nat*F) :=
+ match p with
+  | nil => nil
+  | a1::p' => if even(fst(a1)) then a1::even_poly(p') else even_poly(p')
+  end.
+
+Fixpoint odd_poly(p:list(nat*F)) :=
+  match p with
+  | nil => nil
+  | a1::p' => if odd(fst(a1)) then a1::odd_poly(p') else odd_poly(p')
+end.
+
+Lemma Pax_eval_add_correct: forall p a1 p' x,
+  p = a1::p' -> Pax_eval (a1::nil)(x) + Pax_eval (p')(x) = Pax_eval(p)(x).
+Proof. intros p a1 p' x. simpl. unfold Pax_eval. destruct p.
+- Admitted.
+
+Lemma poly_even_odd : forall p x, 
+Pax_eval(even_poly(p))(x) + Pax_eval(odd_poly(p))(x) = Pax_eval (p) (x).
+Proof. intros p x. induction p as [|a0 p'].
+  - unfold even_poly, odd_poly, Pax_eval.
+     rewrite -> Rplus_0_l. reflexivity.
+
+  - destruct a0. induction n. simpl. rewrite -> Rplus_assoc. rewrite -> IHp'. 
+    reflexivity. 
