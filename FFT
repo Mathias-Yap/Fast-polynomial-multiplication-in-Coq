@@ -38,11 +38,23 @@ Fixpoint even_poly(p:list(nat*F)): list(nat*F) :=
   | a1::p' => if Nat.even(fst(a1)) then a1::even_poly(p') else even_poly(p')
   end.
 
+Fixpoint even_poly_R(p:list(nat*R)): list(nat*R) :=
+ match p with
+  | nil => nil
+  | a1::p' => if Nat.even(fst(a1)) then a1::even_poly_R(p') else even_poly_R(p')
+  end.
+
 
 Fixpoint odd_poly(p:list(nat*F)): list(nat*F) :=
   match p with
   | nil => nil
   | a1::p' => if Nat.odd(fst(a1)) then a1::odd_poly(p') else odd_poly(p')
+end.
+
+Fixpoint odd_poly_R(p:list(nat*R)): list(nat*R) :=
+  match p with
+  | nil => nil
+  | a1::p' => if Nat.odd(fst(a1)) then a1::odd_poly_R(p') else odd_poly_R(p')
 end.
 
 
@@ -67,13 +79,147 @@ assert(even_poly p = even_poly(a::p)). simpl. rewrite -> Heven. tauto.
 rewrite <- add_recombination. rewrite -> Pax_eval_cons. rewrite <- IHp. rewrite <- add_recombination. lra. Qed.
 
 
-Fixpoint fft(n:nat)(x:R)(p:list(nat*F)) : list(nat*F) :=
-  match n with
-  | 1 => (1*F)
-  | (_*F)::p' => 
-    
- end.
 
+Fixpoint max_degree (p : list (nat * F)) : nat :=
+  match p with
+  | nil => 0
+  | (n, _) :: t => Nat.max n (max_degree t)
+  end.
+
+Lemma max_degree_decreasing : forall p a,
+Nat.le (max_degree(p)) (max_degree(a::p)). intros. induction (a). simpl.
+induction p. 
+- simpl.  rewrite -> Nat.max_0_r. apply Nat.le_0_l. 
+ - Search(max). apply Nat.le_max_r.
+Qed.
+
+Fixpoint find_coeff (n : nat) (p : list (nat * F)): F :=
+  match p with
+  | nil => Fnull
+  | (m, c) :: t => if Nat.eqb m n then c else find_coeff n t
+  end.
+
+Fixpoint find_coeff_R (n : nat) (p : list (nat * R)): R :=
+  match p with
+  | nil => 0
+  | (m, c) :: t => if Nat.eqb m n then c else find_coeff_R n t
+  end.
+
+Definition dense_poly (p:list(nat*F)): list (nat*F) := 
+  let d := max_degree p in 
+  let
+     fix create(deg:nat)(p:list(nat*F)): list (nat*F) :=
+     match deg with
+     | 0 => nil
+     | S(n') => (deg, find_coeff(S(n')) p) :: create n' p 
+     end
+  in
+  create d p.
+
+
+(*Lemma dense_eq_sparse: forall p x,
+Pax_eval(dense_poly p)x = Pax_eval p x.
+Proof. intros. induction p.
+  - auto.
+  -  *)
+
+
+
+
+Fixpoint PinjR(p:list(nat*F)) : list (nat*R) :=
+  match p with
+  | nil => nil
+  | a1::p' => (fst(a1),FinjR(snd a1)) :: PinjR p'
+end.
+
+Fixpoint PaxR_eval (p:list (nat*R)) (x:R) : R :=
+    match p with
+    | nil => 0
+    | fn :: p0 =>  ((snd fn) * (pow x (fst fn))) + PaxR_eval p0 x
+    end.
+
+Lemma PaxR_correct: forall p x,
+ Pax_eval p x = PaxR_eval (PinjR p) x.
+Proof. intros. unfold PinjR. induction p.
+ - simpl. auto.
+ - rewrite -> Pax_eval_cons. simpl. lra. Qed. 
+
+
+Lemma addR_recombination: forall p1 p2 x,
+PaxR_eval p1 x + PaxR_eval p2 x = PaxR_eval (p1++p2) x.
+Proof. intros. induction p1.
+ - simpl. lra.
+ - simpl. lra.
+Qed.
+
+Fixpoint max_degree_R (p : list (nat * R)) : nat :=
+  match p with
+  | nil => 0
+  | (n, _) :: t => Nat.max n (max_degree_R t)
+  end.
+
+Lemma max_degree_R_decreasing : forall p a,
+Nat.le (max_degree(p)) (max_degree(a::p)). intros. induction (a). simpl.
+induction p. 
+- simpl.  rewrite -> Nat.max_0_r. apply Nat.le_0_l. 
+- apply Nat.le_max_r.
+Qed.
+(* Lemma even_plus_odd_R: forall p x,
+PaxR_eval (odd_poly_R p) x + PaxR_eval (even_poly_R p) x = PaxR_eval p x.
+Proof. intros. rewrite -> addR_recombination. induction p. simpl. lra. simpl. 
+ simpl. destruct (Nat.even (fst a)) eqn:Heven. 
+rewrite <- Nat.negb_even. rewrite -> Heven. simpl.
+induction p. auto. destruct (Nat.even(fst a0)) eqn:Heven2. destruct(Nat.odd(fst a0)) eqn:Hodd.
+- 
+rewrite <- Nat.negb_even. rewrite -> Heven. simpl. 
+assert(even_poly p = even_poly(a::p)). simpl. rewrite -> Heven. tauto. 
+rewrite <- add_recombination. rewrite -> Pax_eval_cons. rewrite <- IHp. rewrite <- add_recombination. lra. Qed.
+*)
+
+Definition fft(p:list(nat*R)) : list(nat*R) :=
+let m:= max_degree_R p in 
+let w:= nth_unit_root m in
+
+let fix fft_rec(m:nat)(w:R)(p:list(nat*R)): list(nat*R) :=
+  let n := max_degree_R p in 
+    match n, m with
+     |0, _ => p 
+     |_,0 => nil
+     |_,S(m') =>     let y_e := fft_rec m' w (even_poly p) in 
+                     let y_o := fft_rec m' w (odd_poly p)  in
+                     let 
+                        fix inrange(j: nat)(w:R)(e o: list(nat*R)) :=
+                            match j, y_e, y_o with
+                            | 0,_,_ => nil
+                            | _, nil,_ => nil
+                            | _,_, nil => nil
+                            | S(j'),e1::e',o1::o' => 
+                                           (Nat.add j(Nat.div n 2),(snd e1 - w^n*(snd o1))) ::
+                                           (n, (snd e1 + w^n*(snd o1))) ::
+                                           inrange(j')(w) e' o'
+                            end in
+                     inrange n w y_e y_o  end in
+    fft_rec m w p.
+
+Lemma fft_corr: forall (p:list(nat*F)) (n : nat),
+n < (max_degree p) -> Pax_eval p (nth_unit_root (max_degree p)^n) = find_coeff_R(n)(fft p).
+Proof. intros. induction p.
+ -  simpl. auto.
+ -rewrite -> Pax_eval_cons. unfold find_coeff_R. 
+  assert(max_degree(a::p) = fst(a) \/ max_degree(a::p) = max_degree p). simpl. 
+  induction p. left. Search(max). simpl. rewrite <- Nat.max_0_r. 
+Fixpoint fft2(n:nat)(w:R)(p:list(nat*F)):list(nat*R) :=
+match n with
+  | S(S(n)) => let ev:= fft(1%nat)(w^
+
+
+
+(*let ev := fft(n/2)(even_poly p) in
+           let ov := fft(n/2)(odd_poly p) in *)     
+
+
+
+Next Obligation. simpl. Search(Nat.divmod). 
 
 
 
