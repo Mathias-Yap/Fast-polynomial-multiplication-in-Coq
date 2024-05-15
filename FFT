@@ -9,7 +9,7 @@ Context `{F : Type} `{FltF : Float F}.
 Open Scope R_scope.
 Definition i := sqrt(-1).
 
-Definition nth_unit_root(n:nat) :=
+Definition nth_unit_root(n:nat): R :=
   cos((2*PI)/n) + i * sin ((2*PI)/n).
 Definition Even:= Nat.Even.
 Definition Odd:= Nat.Odd.
@@ -105,26 +105,6 @@ Fixpoint find_coeff_R (n : nat) (p : list (nat * R)): R :=
   | (m, c) :: t => if Nat.eqb m n then c else find_coeff_R n t
   end.
 
-Definition dense_poly (p:list(nat*F)): list (nat*F) := 
-  let d := max_degree p in 
-  let
-     fix create(deg:nat)(p:list(nat*F)): list (nat*F) :=
-     match deg with
-     | 0 => nil
-     | S(n') => (deg, find_coeff(S(n')) p) :: create n' p 
-     end
-  in
-  create d p.
-
-
-(*Lemma dense_eq_sparse: forall p x,
-Pax_eval(dense_poly p)x = Pax_eval p x.
-Proof. intros. induction p.
-  - auto.
-  -  *)
-
-
-
 
 Fixpoint PinjR(p:list(nat*F)) : list (nat*R) :=
   match p with
@@ -164,18 +144,165 @@ induction p.
 - simpl.  rewrite -> Nat.max_0_r. apply Nat.le_0_l. 
 - apply Nat.le_max_r.
 Qed.
-(* Lemma even_plus_odd_R: forall p x,
-PaxR_eval (odd_poly_R p) x + PaxR_eval (even_poly_R p) x = PaxR_eval p x.
-Proof. intros. rewrite -> addR_recombination. induction p. simpl. lra. simpl. 
- simpl. destruct (Nat.even (fst a)) eqn:Heven. 
-rewrite <- Nat.negb_even. rewrite -> Heven. simpl.
-induction p. auto. destruct (Nat.even(fst a0)) eqn:Heven2. destruct(Nat.odd(fst a0)) eqn:Hodd.
-- 
-rewrite <- Nat.negb_even. rewrite -> Heven. simpl. 
-assert(even_poly p = even_poly(a::p)). simpl. rewrite -> Heven. tauto. 
-rewrite <- add_recombination. rewrite -> Pax_eval_cons. rewrite <- IHp. rewrite <- add_recombination. lra. Qed.
-*)
 
+Lemma PaxR_eval_cons: forall (p1 : list (nat * R)) (a0:nat*R) (y : R),
+  PaxR_eval (a0 :: p1) y =
+  snd a0 * y ^ fst a0 + PaxR_eval p1 y.
+Proof. intros. simpl. tauto. Qed.
+
+Lemma even_plus_odd_R: forall p x,
+PaxR_eval (odd_poly_R p) x + PaxR_eval (even_poly_R p) x = PaxR_eval p x.
+Proof. intros. induction p.
+- simpl. lra.
+- simpl. destruct (Nat.even (fst a)) eqn:Heven. 
+rewrite <- Nat.negb_even. rewrite -> Heven. simpl. lra. 
+rewrite <- Nat.negb_even. rewrite -> Heven. simpl. lra. Qed.
+
+
+
+Definition dense_poly := list R.
+
+(* Definition sparse_to_dense (p : list (nat * R)) : dense_poly :=
+  let d := max_degree_R p in
+  let
+    fix create (deg : nat) (p : list (nat * R)) : list R :=
+      match deg with
+      | 0 => nil
+      | S n' =>
+        let coeff := fold_left 
+        (fun acc '(d, c) => if Nat.eqb d deg then c + acc else acc) p 0 in
+        coeff :: create n' p
+      end
+  in
+  create d p. *)
+
+Fixpoint sparse_to_dense' (d:nat) (p:list(nat*R)) : dense_poly :=
+  match d, p with
+  | _,nil => nil
+  | _,a::p' => if Nat.eqb (fst a) d then snd a :: sparse_to_dense' (S d) p' else
+              0 :: sparse_to_dense' (S d) p'
+end.
+
+Definition sparse_to_dense (p : list(nat*R)) : dense_poly :=
+  sparse_to_dense' 0 p.
+
+Fixpoint dense_to_sparse' (d:nat)(p:dense_poly) : list(nat*R) :=
+    match p with
+    | nil => nil
+    | fn :: p0 => (d,fn) :: dense_to_sparse' (S d) p0
+    end.
+
+Fixpoint Pdense_eval'(d:nat) (p: dense_poly) (x:R) : R :=
+  match p with
+  | nil => 0
+  | fn :: p0 => fn * (pow x d) + Pdense_eval' (S d) p0 x
+  end.
+
+Definition Pdense_eval(p:dense_poly) (x:R) : R :=
+  Pdense_eval' 0 p x.
+Definition dense_to_sparse(p:dense_poly):list(nat*R) :=
+  dense_to_sparse' 0 p.
+
+(* Lemma Peval_step1: forall p fn d x,
+Pdense_eval' d (fn::p) x = fn *(pow x d) + Pdense_eval' (S d) (p) x.
+intros. simpl. lra. Qed.
+ 
+Lemma Peval_step: forall p d x,
+Pdense_eval' d p x = hd 0 p *(pow x d) + Pdense_eval' (S d) (tail p) x.
+intros. induction p. simpl. lra. simpl. lra. Qed.
+
+(*Lemma Peval_div: forall p d x,
+Pdense_eval d p x = Pdense_eval (S d) p x / x.
+intros. induction p. simpl. lra. simpl. rewrite -> Peval_step. symmetry.
+rewrite -> Peval_step. *) *)
+
+Lemma Peval_dts': forall p d x,
+PaxR_eval (dense_to_sparse' d p) x = Pdense_eval' d p x.
+Proof.
+intros p. 
+induction p as [|fn p]. auto. 
+simpl. intros. rewrite -> IHp. lra. Qed.
+
+Lemma Peval_std': forall p,
+is_sorted_fst p -> PaxR_eval (dense_to_sparse (sparse_to_dense p)) = PaxR_eval p.
+intros. induction p.
+ - auto.
+ - Search(is_sorted_fst). Abort.
+   
+
+
+
+Lemma Peval_dts: forall p x,
+PaxR_eval (dense_to_sparse p) x = Pdense_eval p x.
+Proof.
+intros. unfold dense_to_sparse,Pdense_eval. apply Peval_dts'. Qed.
+ 
+
+Fixpoint even_poly_D'(d:nat)(p:dense_poly): dense_poly :=
+ match p with
+  | nil => nil
+  | a1::p' => if Nat.even(d) then a1::even_poly_D' (S d) p' else even_poly_D'(S d) p'
+  end.
+
+Fixpoint odd_poly_D'(d:nat)(p:dense_poly): dense_poly :=
+  match p with
+  | nil => nil
+  | a1::p' => if Nat.odd(d) then a1::odd_poly_D'(S d) p' else odd_poly_D'(S d) p'
+end.
+
+Definition even_poly_D(p:dense_poly): dense_poly :=
+  even_poly_D' 0 p.
+Definition odd_poly_D(p:dense_poly): dense_poly :=
+  odd_poly_D' 0 p.
+
+Lemma even_succ_odd:  forall p n,
+even_poly_D' n p = odd_poly_D' (S n) p.
+Proof. intros p. induction p. 
+   - auto. 
+   - simpl. intros n. rewrite -> Nat.odd_succ.
+     destruct (Nat.even n) eqn: E.
+      + f_equal. apply IHp.
+      + apply IHp.
+Qed.
+
+Lemma odd_succ_even:  forall p n,
+odd_poly_D' n p = even_poly_D' (S n) p.
+Proof. intros p. induction p. 
+   - auto. 
+   - intros n. induction n.
+      + simpl. apply IHp.
+      + simpl. rewrite -> Nat.odd_succ. 
+        destruct(Nat.even n) eqn: E.
+          * f_equal. apply IHp.
+          * apply IHp. 
+Qed.
+
+Lemma pdense_eval_scale : forall (p : list R) (x : R) (d:nat),
+  Pdense_eval' (S d) p x = x * Pdense_eval' d p x.
+Proof.
+  intros p x.
+  induction p as [| fn p IHp].
+  - simpl. intros. 
+    ring.
+  - simpl. intros. 
+    rewrite IHp.
+    ring_simplify. 
+    reflexivity.
+Qed.
+
+Lemma even_and_odd_D': forall p x,
+ Pdense_eval (even_poly_D' 0 p) (x^2) + x*Pdense_eval(odd_poly_D' 0 p) (x^2) = Pdense_eval p x.
+intros. induction p.
+ - unfold Pdense_eval. simpl. lra.
+ - simpl. rewrite <- even_succ_odd. rewrite <- odd_succ_even. 
+   assert(forall p x, Pdense_eval(a::p)x = a + x*Pdense_eval(p)x). intros. unfold Pdense_eval. simpl.
+   f_equal. lra. apply pdense_eval_scale.
+   repeat rewrite -> H. rewrite <- IHp. simpl. lra. Qed.
+
+Lemma even_and_odd_D: forall p x,
+ Pdense_eval (even_poly_D p) (x^2) + x*Pdense_eval(odd_poly_D p) (x^2) = Pdense_eval p x.
+Proof. apply even_and_odd_D'. Qed.
+ 
 Definition fft(p:list(nat*R)) : list(nat*R) :=
 let m:= max_degree_R p in 
 let w:= nth_unit_root m in
@@ -185,8 +312,8 @@ let fix fft_rec(m:nat)(w:R)(p:list(nat*R)): list(nat*R) :=
     match n, m with
      |0, _ => p 
      |_,0 => nil
-     |_,S(m') =>     let y_e := fft_rec m' w (even_poly p) in 
-                     let y_o := fft_rec m' w (odd_poly p)  in
+     |_,S(m') =>     let y_e := fft_rec m' w (even_poly_R p) in 
+                     let y_o := fft_rec m' w (odd_poly_R p)  in
                      let 
                         fix inrange(j: nat)(w:R)(e o: list(nat*R)) :=
                             match j, y_e, y_o with
@@ -201,17 +328,29 @@ let fix fft_rec(m:nat)(w:R)(p:list(nat*R)): list(nat*R) :=
                      inrange n w y_e y_o  end in
     fft_rec m w p.
 
-Lemma fft_corr: forall (p:list(nat*F)) (n : nat),
-n < (max_degree p) -> Pax_eval p (nth_unit_root (max_degree p)^n) = find_coeff_R(n)(fft p).
-Proof. intros. induction p.
- -  simpl. auto.
- -rewrite -> Pax_eval_cons. unfold find_coeff_R. 
-  assert(max_degree(a::p) = fst(a) \/ max_degree(a::p) = max_degree p). simpl. 
-  induction p. left. Search(max). simpl. rewrite <- Nat.max_0_r. 
-Fixpoint fft2(n:nat)(w:R)(p:list(nat*F)):list(nat*R) :=
-match n with
-  | S(S(n)) => let ev:= fft(1%nat)(w^
+Fixpoint make_two (y_e y_o: list R) (w: R) (j: nat): (list R * list R) :=
+  match y_e, y_o with
+  | _, nil => (nil, nil)
+  | nil, _ => (nil, nil)
+  | e1::y_e', o1::y_o' =>
+      let (list_pos, list_neg) := make_two y_e' y_o' w (S j) in
+      (e1 + w^j * o1 :: list_pos, e1 - w^j * o1 :: list_neg)
+  end.
 
+Definition rec_fft (y_e y_o: list R) (w:R): list R :=
+  let (e,o) := make_two y_e y_o w 0 in
+  e++o.
+
+Fixpoint fft_dense(p:list R) (w:R) (m:nat) : list R :=
+  match m with
+    | 0 => nil
+    | S(m') => let y_e:= fft_dense(even_poly_D p) w  m'  in
+               let y_o:= fft_dense (odd_poly_D p) w m'  in
+               rec_fft y_e y_o w
+end.
+      
+Lemma fft_cor : forall p m j,
+ Pdense_eval p (nth_unit_root(m)^j) = nth j (fft_dense p (nth_unit_root m) m). 
 
 
 (*let ev := fft(n/2)(even_poly p) in
