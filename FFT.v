@@ -290,14 +290,15 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma pdense_eval_add : forall a p x, Pdense_eval(a::p)x = a + x*Pdense_eval(p)x.
+ intros. unfold Pdense_eval. simpl. f_equal. lra. apply pdense_eval_scale. Qed.
+
 Lemma even_and_odd_D': forall p x,
  Pdense_eval (even_poly_D' 0 p) (x^2) + x*Pdense_eval(odd_poly_D' 0 p) (x^2) = Pdense_eval p x.
 intros. induction p.
  - unfold Pdense_eval. simpl. lra.
  - simpl. rewrite <- even_succ_odd. rewrite <- odd_succ_even. 
-   assert(forall p x, Pdense_eval(a::p)x = a + x*Pdense_eval(p)x). intros. unfold Pdense_eval. simpl.
-   f_equal. lra. apply pdense_eval_scale.
-   repeat rewrite -> H. rewrite <- IHp. simpl. lra. Qed.
+   repeat rewrite -> pdense_eval_add. rewrite <- IHp. simpl. lra. Qed.
 
 Lemma even_and_odd_D: forall p x,
  Pdense_eval (even_poly_D p) (x^2) + x*Pdense_eval(odd_poly_D p) (x^2) = Pdense_eval p x.
@@ -337,23 +338,69 @@ Fixpoint make_two (y_e y_o: list R) (w: R) (j: nat): (list R * list R) :=
       (e1 + w^j * o1 :: list_pos, e1 - w^j * o1 :: list_neg)
   end.
 
-Definition rec_fft (y_e y_o: list R) (w:R): list R :=
-  let (e,o) := make_two y_e y_o w 0 in
-  e++o.
+Definition fft_rec(y_e y_o : list R) (w : R): list R :=
+  fst(make_two y_e y_o w 0) ++ snd(make_two y_e y_o w 0).
 
 Fixpoint fft_dense(p:list R) (w:R) (m:nat) : list R :=
-  match m with
-    | 0 => nil
-    | S(m') => let y_e:= fft_dense(even_poly_D p) w  m'  in
-               let y_o:= fft_dense (odd_poly_D p) w m'  in
-               rec_fft y_e y_o w
+  match m,p with
+    | 0,_ => nil
+    | _,nil => nil
+    | S(m'),p => let y_e:= fft_dense(even_poly_D p) w  m'  in
+                     let y_o:= fft_dense (odd_poly_D p) w m'  in
+                     let (l1,l2) := make_two y_e y_o w 0 in
+                     l1++l2
 end.
-      
-Lemma fft_cor : forall p m j,
- Pdense_eval p (nth_unit_root(m)^j) = nth j (fft_dense p (nth_unit_root m) m). 
+
+Fixpoint unit_root_evals (p: list R) (w:R)(j:nat) : list R :=
+  match j,p with
+  | O,_ => nil
+  | _, nil => nil
+  | S j',a::p =>
+      let prev_evals := unit_root_evals p w j' in
+      prev_evals ++ (Pdense_eval p (w ^ j)::nil)
+  end.
+
+Definition greater_degree(p : dense_poly) (n:nat): Prop :=
+  n > length p.
+
+Lemma inductive_even : forall a p,
+even_poly_D (a::p) = a :: odd_poly_D p.
+intros. unfold even_poly_D, odd_poly_D; simpl. rewrite <- odd_succ_even. auto. Qed.
+
+Lemma inductive_odd : forall a p,
+odd_poly_D (a::p) = even_poly_D p.
+intros. unfold even_poly_D, odd_poly_D; simpl. rewrite <- even_succ_odd. auto. Qed.
+
+Lemma make_two_corr: forall p n w,
+greater_degree p n -> nth_unit_root(2^n) = w  -> 
+ fst(make_two(even_poly_D p)(odd_poly_D p) w 0) = unit_root_evals p w n.
+Proof.
+induction p. 
+ - unfold unit_root_evals; simpl. induction n. 
+  + auto.
+  + auto.
+ - intros. rewrite -> inductive_even. rewrite -> inductive_odd. simpl. 
+  (*+ assert(nth_unit_root (2^0) = 1). unfold nth_unit_root. simpl.
+    assert(2*PI/1 = 2*PI). lra. rewrite -> H1. Search(cos). rewrite -> cos_2PI.
+    rewrite -> sin_2PI. lra. rewrite -> H1 in H0; symmetry in H0. simpl. rewrite -> H0.
+    rewrite <- odd_succ_even. *)
+    
+    
+ 
+    Search(sin).
 
 
-(*let ev := fft(n/2)(even_poly p) in
+ 
+ 
+
+Lemma fft_correct: forall p n w,
+greater_degree p n -> nth_unit_root(2^n) = w -> Pdense_eval p w = hd 0 (fft_dense p w n).
+intros. induction p. unfold Pdense_eval. simpl. unfold fft_dense.
+destruct n. auto. unfold even_poly_D, odd_poly_D. simpl. auto.
+unfold Pdense_eval. simpl. rewrite -> pdense_eval_scale.
+unfold fft_dense. unfold rec_fft; unfold make_two. 
+
+(*let ev := fft(n/2)(even_poly p) in w
            let ov := fft(n/2)(odd_poly p) in *)     
 
 
