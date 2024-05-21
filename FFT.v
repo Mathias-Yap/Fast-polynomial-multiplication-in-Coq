@@ -223,12 +223,26 @@ intros p.
 induction p as [|fn p]. auto. 
 simpl. intros. rewrite -> IHp. lra. Qed.
 
-Lemma Peval_std': forall p,
-is_sorted_fst p -> PaxR_eval (dense_to_sparse (sparse_to_dense p)) = PaxR_eval p.
-intros. induction p.
- - auto.
- - Search(is_sorted_fst). Abort.
-   
+Lemma Pdense_inductive_step: forall p x n,
+  x * Pdense_eval' n p x = Pdense_eval' (S n) p x.
+Proof. intros p x. induction p.
+- unfold Pdense_eval'. intros n. lra.
+- simpl. intros n. 
+  assert (x*(a*x^n + Pdense_eval' (S n) p x) = a*(x*x^n) + x*Pdense_eval'(S n) p x).
+   lra. rewrite -> H. f_equal. apply IHp. Qed.
+
+Lemma sparse_to_dense_step: forall p a n, 
+is_sorted_fst(a::p) ->
+fst a =? n = true -> sparse_to_dense' (S n) (a::p) = 0::sparse_to_dense' n p.
+Proof. intros p0 a0. induction p0.
+-  simpl. intros. assert (fst a0 =? (S n) = false). Search(_=?_). rewrite Nat.eqb_eq in H0.
+  rewrite Nat.eqb_neq. rewrite -> H0. lia. rewrite -> H1. auto. 
+- intros. simpl. 
+  destruct (fst a =? (S (S n))) eqn: ea.
+    + rewrite -> Nat.eqb_eq in ea. assert(fst a =? n = false). rewrite -> Nat.eqb_neq. 
+      rewrite -> ea. lia. rewrite -> H1. assert (fst a0 =? (S n) = false). Search(_=?_). rewrite Nat.eqb_eq in H0.
+  rewrite Nat.eqb_neq. rewrite -> H0. lia. rewrite -> H2. unfold sparse_to_dense'. simpl. Abort.
+    
 
 
 
@@ -303,6 +317,26 @@ intros. induction p.
 Lemma even_and_odd_D: forall p x,
  Pdense_eval (even_poly_D p) (x^2) + x*Pdense_eval(odd_poly_D p) (x^2) = Pdense_eval p x.
 Proof. apply even_and_odd_D'. Qed.
+
+Lemma sparse_to_dense_step: forall p x n,
+Pdense_eval (sparse_to_dense' n p) x = x*Pdense_eval (sparse_to_dense' (S n) p) x. 
+intros p x. induction p.
+- intros. unfold sparse_to_dense, Pdense_eval; simpl. lra.
+- intros. unfold sparse_to_dense, Pdense_eval; simpl. destruct (fst a =? n) eqn:E.
+  rewrite -> Nat.eqb_eq in E. rewrite -> E. simpl. assert(n =? (S n) = false). 
+  rewrite -> Nat.eqb_neq. lia. rewrite -> H. rewrite -> pdense_eval_add. rewrite <- IHp.
+  f_equal.
+
+Lemma Peval_std': forall p x,
+is_sorted_fst p -> Pdense_eval (sparse_to_dense p) x = PaxR_eval p x.
+induction p.
+ - auto.
+ - intros. unfold dense_to_sparse,sparse_to_dense. simpl. 
+    destruct (fst a =? 0) eqn:E.
+      + rewrite -> Nat.eqb_eq in E. rewrite -> E. unfold Pdense_eval. simpl. 
+        rewrite -> pdense_eval_scale.
+        rewrite <- IHp. simpl.
+        
  
 Definition fft(p:list(nat*R)) : list(nat*R) :=
 let m:= max_degree_R p in 
