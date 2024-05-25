@@ -251,7 +251,36 @@ PaxR_eval (dense_to_sparse p) x = Pdense_eval p x.
 Proof.
 intros. unfold dense_to_sparse,Pdense_eval. apply Peval_dts'. Qed.
  
+Fixpoint degree_poly' (n:nat)(p:dense_poly) : nat :=
+match p with
+  | nil => n
+  | c::p' => degree_poly'(S n)(p')
+end.
 
+Definition degree_poly (p:dense_poly) : nat :=
+ degree_poly' O p.
+
+Lemma degree_nil: forall p,
+  p = nil -> degree_poly p = O.
+Proof.
+intros. unfold degree_poly. destruct p.
+  - simpl. reflexivity.
+  - discriminate H. Qed.
+
+Lemma degree_succ: forall p n,
+  S (degree_poly' n p) = degree_poly' (S n) p.
+Proof.
+induction p.
+- simpl. auto.
+- intros. simpl. apply IHp. Qed.
+
+Lemma degree_add_eval: forall a p,
+  degree_poly (a::p) = S(degree_poly p).
+Proof.
+intros. unfold degree_poly. induction p.
+  - simpl. auto.
+  - simpl. symmetry. apply degree_succ. Qed. 
+    
 Fixpoint even_poly_D'(d:nat)(p:dense_poly): dense_poly :=
  match p with
   | nil => nil
@@ -457,39 +486,38 @@ Proof. induction p.
  Pdense_eval p x.
  Qed. *)
 Lemma unit_root_squares: forall n k,
-((nth_unit_root n)^k)^2 = (nth_unit_root (n/2))^k.
+((nth_unit_root (2*n))^k)^2 = (nth_unit_root n)^k.
 Proof.
 Admitted.
 
 Lemma unit_root_symmetry: forall n k,
-(nth_unit_root n)^(k+(n/2)) = - (nth_unit_root n)^k.
+nth_unit_root (2*n)^(k+n) = - (nth_unit_root (2*n))^k.
 Proof.
 intros. unfold nth_unit_root. Admitted.  
 
-Lemma unit_root_squares_2: forall n,
-(nth_unit_root n) ^ 2 = nth_unit_root (n/2).
-Proof.
-Admitted.
 
 Lemma FFT_inductive_step_even: forall p j n,
 Nat.le 1 n ->
-Pdense_eval p ((nth_unit_root n)^j) = 
-Pdense_eval(even_poly_D p)(nth_unit_root(n/2)^j) + 
-(nth_unit_root n)^j * Pdense_eval(odd_poly_D p)(nth_unit_root (n/2)^j).
+Pdense_eval p ((nth_unit_root (2*n)^j)) = 
+Pdense_eval(even_poly_D p)(nth_unit_root n^j) + 
+nth_unit_root (2*n)^j * Pdense_eval(odd_poly_D p)(nth_unit_root n ^j).
 Proof. 
 unfold Nat.le.
 destruct n.
 (* case n = 0 *)
  - intros. exfalso. lia.
 (* case n >= 1*)
-- rewrite <- unit_root_squares. symmetry. apply even_and_odd_D. Qed.
+- intros. assert(nth_unit_root(S n) ^ j = (nth_unit_root(2* S n)^j)^2). 
+  rewrite -> unit_root_squares. reflexivity. 
+  rewrite -> H0.
+    symmetry. apply even_and_odd_D. Qed.
 
 
 Lemma FFT_inductive_step_odd: forall p j n,
 Nat.le 1 n -> 
-Pdense_eval p (nth_unit_root n^(j+(n/2))) = 
-Pdense_eval(even_poly_D p)(nth_unit_root(n/2)^j) - 
-((nth_unit_root n)^j) * Pdense_eval(odd_poly_D p)(nth_unit_root (n/2)^j).
+Pdense_eval p (nth_unit_root (2*n)^(j+ n)) = 
+Pdense_eval(even_poly_D p)(nth_unit_root n ^j) - 
+(nth_unit_root (2*n) ^j) * Pdense_eval(odd_poly_D p)(nth_unit_root n^j).
 Proof.
 unfold Nat.le. 
 destruct n.
@@ -497,11 +525,33 @@ destruct n.
  - intros. exfalso. lia.
 (* induction starts at n = 1*)
  - intros.
-     assert(forall n x p, x - n*p = x+(-n*p)). intros. lra. rewrite -> H0.
+     assert(forall n x p, x - n*p = x+(-n*p)). 
+        intros. lra. rewrite -> H0.
      rewrite <- unit_root_symmetry.
-    
-    
+     assert(forall n j, nth_unit_root (2*n) ^(2*j+2*n) = nth_unit_root (2*n) ^ (j*2)).
+        intros. assert(nth_unit_root (2*n0) ^ (2*j0 + 2 * n0) = nth_unit_root (2*n0) ^ (2*j0 + n0 + n0)) by
+        (f_equal; lia). rewrite -> H1.
+        repeat rewrite -> unit_root_symmetry.
+        rewrite -> Ropp_involutive. f_equal. lia. 
+     assert(nth_unit_root(S n) ^ j = (nth_unit_root(2* S n)^j)^2). 
+        rewrite -> unit_root_squares. reflexivity. 
+        rewrite -> H2.
+     rewrite <- pow_mult. rewrite <- H1. 
+     assert(nth_unit_root (2 * S n) ^ (2 * j + 2 * S n) = 
+            (nth_unit_root (2 * S n) ^ (j+S n)) ^ 2).
+         rewrite <- pow_mult. f_equal. lia.
+     rewrite -> H3.
+     symmetry. apply even_and_odd_D. Qed.
 
+Lemma FFT_base_case: forall n p,
+n = 1%nat -> length p = n -> Pdense_eval p (nth_unit_root n) = hd 0 p.
+Proof.
+intros. unfold nth_unit_root. rewrite -> H. simpl. 
+replace(2*PI/1) with (2*PI) by lra. Search(cos). rewrite -> cos_2PI.
+rewrite -> sin_2PI. replace(1+i*0) with (1) by lra. unfold Pdense_eval. 
+induction p. 
+  - simpl. auto.
+  - simpl. rewrite -> pdense_eval_scale. 
 Lemma unit_root_square: forall n:nat,
 n > 0 -> nth_unit_root(n)^(n/2) = -1.
 Proof.
