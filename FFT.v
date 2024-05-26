@@ -260,13 +260,6 @@ end.
 Definition degree_poly (p:dense_poly) : nat :=
  degree_poly' O p.
 
-Lemma degree_nil: forall p,
-  p = nil -> degree_poly p = O.
-Proof.
-intros. unfold degree_poly. destruct p.
-  - simpl. reflexivity.
-  - discriminate H. Qed.
-
 Lemma degree_succ: forall p n,
   S (degree_poly' n p) = degree_poly' (S n) p.
 Proof.
@@ -274,13 +267,33 @@ induction p.
 - simpl. auto.
 - intros. simpl. apply IHp. Qed.
 
-Lemma degree_add_eval: forall a p,
+Lemma degree_add: forall a p,
   degree_poly (a::p) = S(degree_poly p).
 Proof.
 intros. unfold degree_poly. induction p.
   - simpl. auto.
   - simpl. symmetry. apply degree_succ. Qed. 
-    
+
+Lemma degree_nil: forall p,
+  p = nil <-> degree_poly p = O.
+Proof.
+split. 
+  - intros. unfold degree_poly. destruct p.
+    + simpl. reflexivity.
+    + discriminate H.
+  - unfold degree_poly. intros. induction p.
+    + simpl. auto.
+    + rewrite -> degree_add in H. discriminate H. Qed.
+
+Lemma degree_one_eval: forall x p,
+ degree_poly p = 1%nat -> Pdense_eval p x = hd 0 p.
+intros.
+  destruct p.
+  - discriminate H.
+  - rewrite -> degree_add in H. injection H as H0.
+    assert(p = nil). apply degree_nil. exact H0.
+    rewrite -> H. simpl. unfold Pdense_eval. simpl. lra. Qed.
+
 Fixpoint even_poly_D'(d:nat)(p:dense_poly): dense_poly :=
  match p with
   | nil => nil
@@ -544,7 +557,7 @@ destruct n.
      symmetry. apply even_and_odd_D. Qed.
 
 Lemma FFT_base_case: forall n p,
-n = 1%nat -> length p = n -> Pdense_eval p (nth_unit_root n) = hd 0 p.
+n = 1%nat -> degree_poly p = n -> Pdense_eval p (nth_unit_root n) = hd 0 p.
 Proof.
 intros. unfold nth_unit_root. rewrite -> H. simpl. 
 replace(2*PI/1) with (2*PI) by lra. Search(cos). rewrite -> cos_2PI.
@@ -552,13 +565,7 @@ rewrite -> sin_2PI. replace(1+i*0) with (1) by lra. unfold Pdense_eval.
 induction p. 
   - simpl. auto.
   - simpl. rewrite -> pdense_eval_scale. 
-Lemma unit_root_square: forall n:nat,
-n > 0 -> nth_unit_root(n)^(n/2) = -1.
-Proof.
-intros. simpl. unfold nth_unit_root. induction n.
-  - simpl in H. exfalso. lra.
-  - 
-Fixpoint dft_poly (p:dense_poly) : list R :=
+
 
 
 
