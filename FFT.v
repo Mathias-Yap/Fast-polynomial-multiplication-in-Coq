@@ -244,6 +244,11 @@ Definition Pdense_eval(p:dense_poly) (x:R) : R :=
 Definition dense_to_sparse(p:dense_poly):list(nat*R) :=
   dense_to_sparse' 0 p.
 
+Definition dense_head (p:dense_poly) : R :=
+  match p with
+  | nil => 0
+  | a::p' => a
+  end.
 (* Lemma Peval_step1: forall p fn d x,
 Pdense_eval' d (fn::p) x = fn *(pow x d) + Pdense_eval' (S d) (p) x.
 intros. simpl. lra. Qed.
@@ -345,7 +350,7 @@ Proof.
 Qed.
 
 Lemma degree_one_eval: forall x p,
- degree_poly p = 1%nat -> Pdense_eval p x = hd 0 p.
+ degree_poly p = 1%nat -> Pdense_eval p x = dense_head p.
 Proof. 
   intros; destruct p.
     - discriminate H.
@@ -673,42 +678,79 @@ Proof.
 Qed.
 
 Lemma FFT_base_case: forall p,
-degree_poly p = 1%nat -> Pdense_eval p (nth_unit_root 1%nat) = hd 0 p.
+degree_poly p = 1%nat -> Pdense_eval p (nth_unit_root 1%nat) = dense_head p.
 Proof.
   intros; unfold nth_unit_root. 
-  simpl. 
-  replace(2*PI/1) with (2*PI) by lra. 
-  rewrite -> cos_2PI.
-  rewrite -> sin_2PI.
-  replace(1+i*0) with (1) by lra.
-  apply degree_one_eval.
+  apply degree_one_eval. 
   apply H.
 Qed.
 
-      
-(* Fixpoint fft_dense (n:nat)(m:nat)(p:list R) : list R :=
- match n,m with
-  | _,O => nil
-  | O,_ => nil
-  | S(O),_ => p
-  | S(S(n')),S(m') => let w := nth_unit_root n in
-                      let y_e := fft_dense(n/2)(m')(even_poly_D p) in
-                      let y_o := fft_dense(n/2)(m')(odd_poly_D p) in 
-                      let(l1,l2) := make_two y_e y_o w O in
-                      l1 ++ l2
+Fixpoint powers2(n:nat):list nat :=
+  match n with
+  | O    => 1%nat::nil
+  | S n' => (2^n)%nat :: powers2(n')
+  end.
+
+
+Lemma powers2_succ_head: forall n,
+ (2 * hd O (powers2 n))%nat = hd O (powers2 (S n)).
+Proof.
+intros. destruct n.
+ - simpl. 
+   reflexivity.
+ - simpl.
+   lia.
+Qed. 
+
+Lemma powers2_succ: forall n,
+(2 * hd O (powers2 n))%nat::(powers2 n) = powers2 (S n).
+Proof.
+intros. destruct n.
+  - simpl.
+    reflexivity.
+  - simpl. auto.
+Qed.
+    
+
+Lemma powers2_half : forall n a p,
+  Nat.le 1 n -> powers2 n = a::p -> a = (2*hd O p)%nat.
+Proof.
+intros. destruct n.
+- lia.
+- induction n.
+  + assert (a = hd O (powers2 1)). rewrite -> H0.
+    auto. 
+    simpl in H1.
+    rewrite -> H1.
+    simpl in H0.
+    rewrite -> H1 in H0.
+    inversion H0.
+    simpl.
+    lia.
+  + rewrite <- powers2_succ in H0.
+    inversion H0. simpl. lia.
+Qed. 
+    
+    
+
+Fixpoint fft_again (n:list nat)(p:list R):list R :=
+  match n with
+  | nil       => nil
+  | 1%nat::n' => p
+  | a::n'     => let w := nth_unit_root a in
+                 let y_e := fft_again(n')(even_poly_D p) in
+                 let y_o := fft_again(n')(odd_poly_D p) in 
+                 let (f,s) := make_two y_e y_o w O in
+                 f++s
+  end.
+
+Fixpoint power_evals (p:dense_poly) (w:R) (n:nat) :=
   
-  end. *)
 
-(* Fixpoint make_two (y_e y_o: list R) (w: R) (j: nat): (list R * list R) :=
-  match y_e, y_o with
-  | _, nil => (nil, nil)
-  | nil, _ => (nil, nil)
-  | e1::y_e', o1::y_o' =>
-      let (list_pos, list_neg) := make_two y_e' y_o' w (S j) in
-      (e1 + w^j * o1 :: list_pos, e1 - w^j * o1 :: list_neg)
-  end. *)
-
-Fixpoint fft_again (n:nat)(p:list R):list R :=
+Lemma fft_correct: forall p n,
+2^n = degree_poly p -> fft_again (powers_of_2 n) p = 
+                       Pdense_eval p 
+                  
   
 
 
