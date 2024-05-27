@@ -536,6 +536,9 @@ Fixpoint make_two (y_e y_o: list R) (w: R) (j: nat): (list R * list R) :=
       (e1 + w^j * o1 :: list_pos, e1 - w^j * o1 :: list_neg)
   end.
 
+Definition m2_l (y_e y_o: list R) (w: R): list R :=
+ let(l1,l2) := make_two y_e y_o w O in
+                      l1 ++ l2.
 
 
 Fixpoint fft_dense (n:nat)(m:nat)(p:list R) : list R :=
@@ -742,7 +745,7 @@ intros. destruct n.
     inversion H0. simpl. lia.
 Qed. 
 
-Lemma degree_even_plus_odd: forall p,
+Lemma eo_plus_deg: forall p,
 degree_poly p = (degree_poly(even_poly_D p) + degree_poly(odd_poly_D p))%nat.
 Proof.
   unfold even_poly_D, odd_poly_D.
@@ -758,7 +761,7 @@ Proof.
     lia.
 Qed.
 
-Lemma even_and_odd_equal_succ: forall a p,
+Lemma eo_eq_succ: forall a p,
 degree_poly(even_poly_D p) = degree_poly(odd_poly_D p) ->
 degree_poly(even_poly_D (a::p)) = S(degree_poly(odd_poly_D (a::p))).
 Proof.
@@ -773,7 +776,7 @@ destruct p.
   apply H.
 Qed.
 
-Lemma even_and_odd_not_equal_succ: forall a p,
+Lemma eo_ne_succ: forall a p,
 degree_poly(even_poly_D p) = S(degree_poly(odd_poly_D p)) ->
 degree_poly(even_poly_D (a::p)) = degree_poly(odd_poly_D (a::p)).
 Proof.
@@ -786,77 +789,79 @@ destruct p.
     symmetry.
     apply H.
 Qed.
-  
+
+Lemma eo_equal_or_succ: forall p,
+degree_poly(even_poly_D (p)) = S(degree_poly(odd_poly_D (p)))
+  \/
+degree_poly(even_poly_D (p)) = degree_poly(odd_poly_D (p)).
+Proof.
+induction p.
+  - right; reflexivity.
+  - destruct IHp.
+    + right. 
+      apply eo_ne_succ.
+      exact H.
+    + left.
+      apply eo_eq_succ.
+      exact H.
+Qed.
+
 Lemma even_eq_odd: forall p n,
-degree_poly(even_poly_D p) = (2*n)%nat -> 
+Nat.le 1 (n)%nat -> degree_poly p = (2*n)%nat -> 
 degree_poly(even_poly_D p) = degree_poly(odd_poly_D p).
 Proof.
-intros. unfold even_poly_D, odd_poly_D in *.
-induction p.
-  - simpl. reflexivity.
-  - destruct p.
-    + simpl in H.
-      rewrite -> degree_add in H.
-      assert(degree_poly nil = O) by (rewrite <- degree_nil; reflexivity).
-      rewrite -> H0 in H.
-      exfalso.
-      lia.
-    +
-(*
-Lemma even_degree_succ: forall n  a p,
-degree_poly p = (2%nat^(S n))%nat ->
-degree_poly (even_poly_D p) = degree_poly (even_poly_D (a::p)).
+intros; unfold even_poly_D, odd_poly_D. 
+pose proof eo_equal_or_succ p as [H1 | H2].
+  - rewrite -> eo_plus_deg in H0.
+    rewrite -> H1 in H0.
+    exfalso.
+    replace((S (degree_poly (odd_poly_D p)) + degree_poly (odd_poly_D p))%nat)
+     with 
+           (( 2* degree_poly (odd_poly_D p) + 1)%nat) in H0 by lia.
+    replace((2 * degree_poly (odd_poly_D p) + 1)%nat) with
+            ( S (2 * degree_poly (odd_poly_D p))%nat) in H0 by lia.
+    lia.
+  - unfold even_poly_D, odd_poly_D. 
+    exact H2.
+Qed.
+    
+Lemma even_half_deg: forall p n,
+Nat.le 1 (n)%nat -> degree_poly p = (2*n)%nat -> 
+degree_poly(even_poly_D p) = n.
 Proof.
-intros. unfold even_poly_D.
-induction p.
-  - simpl.
-    assert(degree_poly nil = O) by (rewrite <- degree_nil; reflexivity).
-    rewrite -> H0 in H.
-    assert(2%nat<>0%nat) by (lia).
-    assert((2^S n)%nat <> 0%nat) by (apply Nat.pow_nonzero; apply H1).
-    contradict H2; symmetry.
-    apply H.
-  - simpl.
+  intros.
+  assert(degree_poly (even_poly_D p) = degree_poly (odd_poly_D p)).
+  apply even_eq_odd with (n:= n); auto.
+  rewrite -> eo_plus_deg in H0.
+  rewrite <- H1 in H0.
+  replace ( (degree_poly (even_poly_D p) + degree_poly (even_poly_D p))%nat) with
+           ( (2*degree_poly(even_poly_D p))%nat) in H0 by lia.
+  rewrite -> Nat.mul_cancel_l in H0.
+  lia.
+  lia.
+Qed.
 
-Lemma even_half_degree: forall n p,
-degree_poly p = (2%nat^(S n))%nat -> degree_poly (even_poly_D p) = (2%nat^n)%nat.
+Lemma odd_half_deg: forall p n,
+Nat.le 1 (n)%nat -> degree_poly p = (2*n)%nat ->
+ degree_poly(odd_poly_D p) = n.
 Proof.
-intros.
-unfold even_poly_D; simpl.
-induction p.
-  - simpl.
-    assert(degree_poly nil = O) by (rewrite <- degree_nil; reflexivity).
-    rewrite -> H0 in H.
-    assert(2%nat<>0%nat) by (lia).
-    Search((_^_)%nat).
-    assert((2^S n)%nat <> 0%nat).
-    apply Nat.pow_nonzero. apply H1.
-    contradict H2.
-    symmetry.
-    apply H.
-  - simpl.
-    rewrite -> degree_add.
-    rewrite -> degree_add in H.
-    
-*)
-    
-    
-
-  
-
+  intros.
+  assert(degree_poly (even_poly_D p) = degree_poly (odd_poly_D p)).
+  apply even_eq_odd with (n:= n); auto.
+  rewrite <- H1.
+  apply even_half_deg.
+  auto.
+  auto.
+Qed.
 
 Fixpoint evals (w:R)(n:nat)(p:dense_poly) :=
   match n, p with
-  | O, _ => Pdense_eval p 1::nil
-  | S(n'), _ => (evals w n' p) ++ Pdense_eval p (w^n)::nil
+  | O, _ => Pdense_eval p w^n :: nil
+  | S(n'), _ => Pdense_eval p w^n :: evals w n' p
   end.
-
-Lemma evals_add: forall w  n p,
-w = nth_unit_root n -> 
-  evals w n p ++ Pdense_eval p (w^(S n))::nil = evals w (S n) p.
-Proof.
-intros. simpl. auto.
-Qed.
+Definition evals_asc (w:R)(p:dense_poly) :=
+  let n:= degree_poly p in
+  rev(evals w n p).
 
 Fixpoint fft_again (n:list nat)(p:list R):list R :=
   match n with
@@ -865,23 +870,19 @@ Fixpoint fft_again (n:list nat)(p:list R):list R :=
   | a::n'     => let w := nth_unit_root a in
                  let y_e := fft_again(n')(even_poly_D p) in
                  let y_o := fft_again(n')(odd_poly_D p) in 
-                 let (f,s) := make_two y_e y_o w O in
+                 let (f,s) :=  y_e y_o w O in
                  f++s
   end.
-
-Fixpoint powvec(w:R)(n:nat) :=
-  match n with
-  | O => 1::nil
-  | S(n') => powvec w n' ++ w^n::nil
-end.
   
-Lemma make_two_correct: forall y_e y_o p n,
+Lemma _correct: forall y_e y_o p n,
   Nat.le 1 n -> degree_poly p = (2*n)%nat -> 
-  y_e = evals(nth_unit_root n) n (even_poly_D p) ->
-  y_o = evals(nth_unit_root n) n (odd_poly_D p) ->
-  fst(make_two y_e y_o (nth_unit_root(2*n)) O) = evals(nth_unit_root(2*n)) (n) p.
+  y_e = evals_asc(nth_unit_root n) (even_poly_D p) ->
+  y_o = evals_asc(nth_unit_root n) (odd_poly_D p) ->
+  fst(make_two y_e y_o (nth_unit_root(2*n)) O)++snd(make_two y_e y_o (nth_unit_root(2*n)) O
+ = evals_asc(nth_unit_root(2*n)) p.
 Proof.
 intros. rewrite -> H1; rewrite -> H2.
+simpl.
 unfold make_two.
 
 simpl.
