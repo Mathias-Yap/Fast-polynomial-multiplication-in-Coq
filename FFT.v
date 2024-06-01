@@ -786,9 +786,119 @@ Qed.
 
 Fixpoint evals (w:R)(n:nat)(p:dense_poly) :=
   match n with
-  | O => nil
+  | O => Pdense_eval p (w ^ O) :: nil
   | S(n') => evals w n' p ++ Pdense_eval p (w^n) :: nil 
   end.
+
+Lemma evals_succ: forall n w p,
+evals w (S n) p = evals w n p ++ Pdense_eval p (w^(S n))::nil.
+Proof.
+intros. simpl. reflexivity. Qed.
+
+Lemma evals_nil: forall n w,
+evals w n nil = 0::repeat 0 n.
+Proof.
+induction n.
+  - intros. simpl. unfold Pdense_eval. simpl. auto.
+  - intros. rewrite -> evals_succ.
+    rewrite -> IHn.
+    simpl.
+    unfold Pdense_eval.
+    simpl.
+    rewrite -> repeat_cons.
+    auto. 
+Qed.
+
+
+Lemma evals_length_le_1: forall w n p,
+Nat.le 1 (length(evals w n p)).
+Proof.
+intros.
+induction n.
+  - simpl. lia.
+  - simpl. rewrite -> last_length.
+    apply le_trans with (length (evals w n p)).
+    apply IHn.
+    auto.
+Qed.
+
+Lemma evals_length_eq_n: forall w n p,
+length(evals w n p) = S(n).
+Proof.
+induction n.
+  - intros. simpl. auto.
+  - intros. simpl. rewrite -> last_length.
+    f_equal. apply IHn.
+Qed.
+
+Lemma evals_step: forall n j w a p,
+Nat.le j n -> 
+nth j (evals w n (a::p)) 0 = a + w^j * Pdense_eval p (w^j).
+Proof.
+intros.
+induction n.
+  - simpl. assert(j = O) by lia. rewrite -> H0.
+    rewrite -> pdense_eval_add. simpl. lra.
+  - apply  Nat.lt_eq_cases in H.
+    destruct H.
+    ++ simpl. rewrite -> app_nth1.
+       apply IHn. lia. rewrite -> evals_length_eq_n. auto.
+    ++ simpl. assert(length(evals w n (a :: p)) = j).
+       rewrite -> H. apply evals_length_eq_n.
+       replace (nth j (evals w n (a :: p) ++ Pdense_eval (a :: p) (w * w ^ n) :: nil) 0) with
+       (nth (length(evals w n (a :: p))) (evals w n (a :: p) ++ Pdense_eval (a :: p) (w * w ^ n) :: nil) 0).
+       rewrite -> nth_middle.
+       rewrite -> pdense_eval_add.
+      rewrite -> H.
+      auto.
+      rewrite -> H0. auto.
+Qed.
+
+Lemma pdense_eval_split: forall p w,
+hd 0 p + Pdense_eval' 1 (tl p) w = Pdense_eval p w.
+Proof.
+intros. unfold Pdense_eval. induction p.
+  - simpl. lra.
+  - simpl. rewrite -> pdense_eval_scale.
+    lra.
+Qed. 
+    
+       
+Lemma evals_end: forall p,
+nth (length p - 1) p 0 = last p 0.
+Proof.
+intros.
+induction p.
+  - simpl. lra.
+  - simpl.
+      destruct (length p) eqn: E.
+      apply length_zero_iff_nil in E.
+      rewrite -> E. auto.
+      replace ((S n - 0)%nat) with (S n) by lia.
+      rewrite <- IHp.
+      replace ((S n - 1)%nat) with (n).
+      assert(length p <> O).
+      lia.
+      rewrite -> length_zero_iff_nil in H.
+      destruct p.
+      exfalso; auto.
+      auto.
+      lia.
+Qed.
+
+Lemma evals_correct: forall w n a p,
+Nat.le a n -> nth a (evals w n p) O = Pdense_eval p (w^a).
+Proof.
+induction p.
+ - simpl. unfold Pdense_eval. rewrite -> evals_nil. 
+   rewrite -> repeat_cons. simpl. replace (repeat 0 n ++ 0 :: nil) with (repeat 0 (S n)).
+   rewrite -> nth_repeat. auto.
+   simpl. rewrite <- repeat_cons. auto.
+ - intros. rewrite -> pdense_eval_add.
+   destruct a.
+   -- simpl. rewrite -> evals_step. simpl. auto. lia.
+   -- simpl. rewrite -> evals_step. simpl. auto. auto.
+Qed.
 
 Definition make_two_element(e o: R)(w:R)(j:nat): (R*R) :=
   ((e + w^j * o),(e - w ^ j * o)).
@@ -814,8 +924,8 @@ Fixpoint make_two (y_e y_o: list R) (n:nat)(w: R) (j: nat): (list R * list R) :=
 end.
 
 Definition m2_l (y_e y_o: list R)(w: R): list R :=
- let n      := degree_poly y_e in
- let(l1,l2) := make_two y_e y_o n w O in
+ let n      := length(y_e) in
+ let(l1,l2) := make_two y_e y_o n w n in
                       l1 ++ l2.
 
 Fixpoint fft(n:nat)(p:list R)(w:R):list R :=
@@ -854,7 +964,7 @@ Qed.
   
 
 Lemma eval_deg: forall p w n,
-degree_poly (evals w n p) = n.
+degree_poly (evals w n p) = S n.
 Proof.
 induction n.
   - simpl.
@@ -864,23 +974,113 @@ induction n.
     auto.
 Qed.
 
-Lemma m2_l_even_base: forall n p y_e y_o,
-Nat.le 1 n -> degree_poly p = (2*n)%nat ->
+Fixpoint make_left (y_e y_o: list R) (n:nat)(w: R): list R :=
+  match n with
+  |O => (nth n y_e O) + w^n * (nth n y_o O) :: nil
+  |S(n') => make_left y_e y_o n' w  ++ (((nth n y_e O) + w^n * (nth n y_o O)) :: nil)
+end.
+
+Lemma make_left_length: forall n w y_e y_o,
+length(make_left y_e y_o n w) = S n.
+Proof.
+intros. induction n.
+  - simpl. lia.
+  - simpl. rewrite -> last_length.
+    rewrite -> IHn. auto.
+Qed.
+
+Lemma make_left_cons: forall a n w y_e y_o,
+Nat.le a n ->
+nth a (make_left y_e y_o (S n) (w)) 0 = 
+nth a (make_left y_e y_o (n) w ++ (((nth n y_e O) + w^n * (nth n y_o O)))::nil) 0.
+Proof.
+    intros.
+    simpl. rewrite -> app_nth1.
+    rewrite -> app_nth1.
+    reflexivity.
+    all: rewrite -> make_left_length.
+    all: lia.
+Qed.
+
+Lemma make_left_zero: forall n w e o,
+nth 0 (make_left e o n w) 0 = (nth 0 e O) + w^0 * (nth 0 o O).
+Proof.
+intros. simpl. induction n.
+  - simpl. auto.
+  - simpl. rewrite -> app_nth1.
+    rewrite -> IHn.
+    auto.
+    rewrite -> make_left_length.
+    lia.
+Qed.
+
+
+    
+(* Nat.le a n -> nth a (evals w n p) O = Pdense_eval p (w^a). *)
+Lemma make_left_correct: forall a n y_e y_o p,
+Nat.le 1 n -> Nat.le a n -> degree_poly p = (2*n)%nat ->
 y_e = evals (nth_unit_root (n)) (n) (even_poly_D p) ->
 y_o = evals (nth_unit_root (n)) (n) (odd_poly_D p) ->
-hd 0 (fst(make_two y_e y_o n (nth_unit_root(2*n)) O)) = 
-hd 0 (evals (nth_unit_root (2*n)) (n) p).
+nth a (make_left y_e y_o n (nth_unit_root(2*n))) O  =
+nth a (evals (nth_unit_root (2*n)) (2*n) p) O.
 Proof.
-intros.
-induction n.
-  - exfalso; lia.
-  - Admitted. 
+induction a.
+- intros. rewrite -> make_left_zero.
+  rewrite -> H2, H3.
+  repeat   rewrite -> evals_correct.
+  rewrite -> FFT_inductive_step_even.
+  simpl. auto. 
+  all: lia.
+- intros.
+  rewrite -> evals_correct.
+  Abort.
 
+  
+  
+  
     
     
+    
+    
+     
+       
+(*induction n.
+  - intros. simpl.
+    destruct a.
+    + rewrite -> H1, H2. 
+      assert(p = nil).
+      rewrite -> degree_nil; auto.
+      rewrite -> H3. simpl. 
+      unfold Pdense_eval. simpl.
+      lra.
+    + destruct a. all:auto.
+  - intros. 
+    rewrite -> make_left_cons.
+    rewrite -> app_nth1.
+    rewrite -> evals_correct.*)
 
 
-Lemma m2_l_correct: forall n y_e y_o p,
+
+
+    
+
+   
+      
+(*induction n.
+    + intros. simpl. simpl in H1, H2.
+      rewrite -> H1, H2.
+      simpl. simpl in H0. assert(p = nil). rewrite -> degree_nil. apply H0.
+      rewrite -> H3. unfold Pdense_eval. simpl. lra.
+    + intros. 
+      simpl. rewrite -> app_nth1. simpl in IHn.*)
+     
+      
+      
+
+Admitted. 
+
+
+Lemma m2_l_correct: forall n y_e y_o p j,
 Nat.le 1 n -> degree_poly p = (2*n)%nat ->
 y_e = evals (nth_unit_root (n)) (n) (even_poly_D p) ->
 y_o = evals (nth_unit_root (n)) (n) (odd_poly_D p) ->
@@ -1089,8 +1289,8 @@ Fixpoint scalar_mult (a : R) (p : dense_poly) : dense_poly :=
 
 Fixpoint naive_mult (p1 p2 : dense_poly) : dense_poly :=
   match p1 with
-  | nil => 0::nil
-  | h1 :: t1 => add_dense_poly (scalar_mult h1 p2) (naive_mult t1  p2)
+  | nil => nil
+  | h1 :: t1 => add_dense_poly (scalar_mult h1 p2) (0 :: naive_mult t1  p2)
   end.
 
 Lemma add_cons: forall p1 p2 a,
@@ -1157,19 +1357,12 @@ induction p.
     lra.
 Qed.
 Lemma mul_cons: forall a p1 p2,
-naive_mult (a::p1) p2 = add_dense_poly (scalar_mult a p2) (naive_mult p1 p2).
+naive_mult (a::p1) p2 = add_dense_poly (scalar_mult a p2) (0::naive_mult p1 p2).
 Proof.
 intros.
 simpl. reflexivity. Qed.
 
-Lemma mul_nil: forall p1,
-naive_mult p1 nil = 0::nil.
-Proof.
-intros.
-induction p1.
-  - simpl. auto.
-  - simpl. apply IHp1.
-Qed.
+
 
 Fixpoint new_eval(p:dense_poly)(x:R) :R :=
 match p with
@@ -1191,19 +1384,85 @@ Proof.
 unfold Pdense_eval.
 induction p1.
   - intros.
-    simpl in *.
-    lra.
+    simpl in *. ring.
   - intros.
-    rewrite -> mul_cons.
-    rewrite -> add_correct.
+    rewrite -> pdense_eval_add.
+    rewrite -> mul_cons. 
+    rewrite -> add_correct. 
     rewrite -> scalar_correct.
     ring_simplify.
+    unfold Pdense_eval.
+    rewrite -> pdense_eval_add.
     rewrite <- IHp1.
-    simpl.
+    ring_simplify.
+    auto.
+Qed.
+
+
+
+(*Fixpoint evals (w:R)(n:nat)(p:dense_poly) :=
+  match n with
+  | O => nil
+  | S(n') => evals w n' p ++ Pdense_eval p (w^n) :: nil 
+  end.*)
+
+
+Fixpoint poly_add (p1 p2: list R):= 
+match p1 with
+  | nil => p2
+  | a::p1 => a+(hd 0 p2)::(poly_add p1 (tl p2))
+end.
+
+Lemma poly_add_cons: forall a p1 p2,
+poly_add (a::p1) p2 = (a+hd 0 p2)::poly_add p1 (tl p2).
+Proof.
+intros. simpl. auto. Qed.
+
+Lemma poly_add_correct: forall p1 p2 x,
+Pdense_eval p1 x + Pdense_eval p2 x = Pdense_eval(poly_add p1 p2) x.
+Proof.
+unfold Pdense_eval.
+induction p1.
+  - intros. simpl.
+    lra.
+  - intros.
+    rewrite -> poly_add_cons.
+    repeat rewrite -> pdense_eval_add.
+    rewrite <- IHp1.
+    rewrite -> Rmult_plus_distr_l.
+    unfold Pdense_eval.
+    Search(_+(_+_)).
+    rewrite <- Rplus_assoc.
+    assert(hd 0 p2 + x*Pdense_eval' 0 (tl p2) x = Pdense_eval' 0 (p2)x).
+    induction p2.
+    simpl. lra.
+    simpl. rewrite -> pdense_eval_scale. lra.
+    rewrite <- H.
+    lra.
+Qed.
     
+    
+
+Fixpoint pointwise_mul(p1 p2:list R):=
+  match p1, p2 with
+  | _, nil       => nil
+  | nil, _       => nil
+  | a::p1, b::p2 => a*b::pointwise_mul p1 p2
+end.
+
+Lemma mul_evals: forall p1 p2 n w,
+pointwise_mul
+(evals w (2^n)%nat p1) (evals w (2^n)%nat p2)
+= evals w (2^n)%nat (naive_mult p1 p2).
+Proof.
+intros.
+induction n.
+  - simpl.
     f_equal.
-    simpl.
-    
+    rewrite <- pmul_correct.
+    reflexivity.
+  - simpl.
+
     
     
    
