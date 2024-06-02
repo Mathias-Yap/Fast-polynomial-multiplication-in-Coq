@@ -1014,77 +1014,127 @@ intros. simpl. induction n.
     lia.
 Qed.
 
+Lemma make_left_nth: forall a n w e o,
+Nat.le a n ->
+nth a (make_left e o n w) 0 = (nth a e O) + w^a * (nth a o O).
+Proof.
+intros. induction n.
+  - simpl. destruct a.
+    auto. exfalso; lia.
+  - simpl. 
+    apply le_lt_or_eq in H.
+    destruct H.
+    + rewrite -> app_nth1.
+      apply IHn. lia. rewrite -> make_left_length. lia.
+    + rewrite -> app_nth2 by (rewrite -> make_left_length; lia).
+      rewrite -> make_left_length.
+      rewrite -> H.
+      simpl.
+      replace ((n-n)%nat) with O by lia.
+      auto.   
+Qed.
 
     
 (* Nat.le a n -> nth a (evals w n p) O = Pdense_eval p (w^a). *)
-Lemma make_left_correct: forall a n y_e y_o p,
-Nat.le 1 n -> Nat.le a n -> degree_poly p = (2*n)%nat ->
-y_e = evals (nth_unit_root (n)) (n) (even_poly_D p) ->
-y_o = evals (nth_unit_root (n)) (n) (odd_poly_D p) ->
+Lemma make_left_correct: forall n a y_e y_o p,
+Nat.le 1 n -> Nat.lt a n -> degree_poly p = (2*n)%nat ->
+y_e = evals (nth_unit_root (n)) (n-1) (even_poly_D p) ->
+y_o = evals (nth_unit_root (n)) (n-1) (odd_poly_D p) ->
 nth a (make_left y_e y_o n (nth_unit_root(2*n))) O  =
-nth a (evals (nth_unit_root (2*n)) (2*n) p) O.
+nth a (evals (nth_unit_root (2*n)) (2*n-1) p) O.
 Proof.
-induction a.
-- intros. rewrite -> make_left_zero.
-  rewrite -> H2, H3.
-  repeat   rewrite -> evals_correct.
-  rewrite -> FFT_inductive_step_even.
-  simpl. auto. 
-  all: lia.
-- intros.
-  rewrite -> evals_correct.
-  Abort.
+intros.
+induction n.
+  - simpl. exfalso. lia.
+  - rewrite -> make_left_nth by lia.
+    rewrite -> H2, H3.
+    repeat rewrite -> evals_correct by lia.
+    rewrite -> FFT_inductive_step_even by auto. 
+    auto.
+Qed.
 
-  
-  
-  
-    
-    
-    
-    
-     
-       
-(*induction n.
-  - intros. simpl.
-    destruct a.
-    + rewrite -> H1, H2. 
-      assert(p = nil).
-      rewrite -> degree_nil; auto.
-      rewrite -> H3. simpl. 
-      unfold Pdense_eval. simpl.
-      lra.
-    + destruct a. all:auto.
-  - intros. 
-    rewrite -> make_left_cons.
+Fixpoint make_right (y_e y_o: list R) (n:nat)(w: R): list R :=
+  match n with
+  |O => (nth n y_e O) - w^n * (nth n y_o O) :: nil
+  |S(n') => make_right y_e y_o n' w  ++ (((nth n y_e O) - w^n * (nth n y_o O)) :: nil)
+end.
+
+Lemma make_right_length: forall n w y_e y_o,
+length(make_right y_e y_o n w) = S n.
+Proof.
+intros. induction n.
+  - simpl. lia.
+  - simpl. rewrite -> last_length.
+    rewrite -> IHn. auto.
+Qed.
+
+Lemma make_right_cons: forall a n w y_e y_o,
+Nat.le a n ->
+nth a (make_right y_e y_o (S n) (w)) 0 = 
+nth a (make_right y_e y_o (n) w ++ (((nth n y_e O) + w^n * (nth n y_o O)))::nil) 0.
+Proof.
+    intros.
+    simpl. rewrite -> app_nth1.
     rewrite -> app_nth1.
-    rewrite -> evals_correct.*)
+    reflexivity.
+    all: rewrite -> make_right_length.
+    all: lia.
+Qed.
 
+Lemma make_right_zero: forall n w e o,
+nth 0 (make_right e o n w) 0 = (nth 0 e O) - w^0 * (nth 0 o O).
+Proof.
+intros. simpl. induction n.
+  - simpl. auto.
+  - simpl. rewrite -> app_nth1.
+    rewrite -> IHn.
+    auto.
+    rewrite -> make_right_length.
+    lia.
+Qed.
 
+Lemma make_right_nth: forall a n e o w,
+Nat.le a n ->
+nth a (make_right e o n w) 0 = (nth a e O) - w^a * (nth a o O).
+Proof.
+intros. induction n.
+  - simpl. destruct a.
+    auto. exfalso; lia.
+  - simpl. 
+    apply le_lt_or_eq in H.
+    destruct H.
+    + rewrite -> app_nth1.
+      apply IHn. lia. rewrite -> make_right_length. lia.
+    + rewrite -> app_nth2 by (rewrite -> make_right_length; lia).
+      rewrite -> make_right_length.
+      rewrite -> H.
+      simpl.
+      replace ((n-n)%nat) with O by lia.
+      auto.   
+Qed.
 
+Lemma make_right_correct: forall n a y_e y_o p,
+Nat.le 1 n -> Nat.lt a n -> degree_poly p = (2*n)%nat ->
+y_e = evals (nth_unit_root (n)) (n-1) (even_poly_D p) ->
+y_o = evals (nth_unit_root (n)) (n-1) (odd_poly_D p) ->
+nth a (make_right y_e y_o n (nth_unit_root(2*n))) O  =
+nth (a+n) (evals (nth_unit_root (2*n)) (2*n-1) p) O.
+Proof.
+intros.
+induction n.
+  - simpl. exfalso. lia.
+  - rewrite -> make_right_nth by lia.
+    rewrite -> H2, H3.
+    repeat rewrite -> evals_correct by lia.
+    rewrite -> FFT_inductive_step_odd by auto.
+    auto.
+Qed.
 
-    
-
-   
-      
-(*induction n.
-    + intros. simpl. simpl in H1, H2.
-      rewrite -> H1, H2.
-      simpl. simpl in H0. assert(p = nil). rewrite -> degree_nil. apply H0.
-      rewrite -> H3. unfold Pdense_eval. simpl. lra.
-    + intros. 
-      simpl. rewrite -> app_nth1. simpl in IHn.*)
-     
-      
-      
-
-Admitted. 
-
-
-Lemma m2_l_correct: forall n y_e y_o p j,
+Lemma m2_l_correct: forall n y_e y_o p,
 Nat.le 1 n -> degree_poly p = (2*n)%nat ->
-y_e = evals (nth_unit_root (n)) (n) (even_poly_D p) ->
-y_o = evals (nth_unit_root (n)) (n) (odd_poly_D p) ->
-m2_l y_e y_o (nth_unit_root(2*n)) = evals (nth_unit_root (2*n)) (2*n) p.
+y_e = evals (nth_unit_root (n)) (n-1) (even_poly_D p) ->
+y_o = evals (nth_unit_root (n)) (n-1) (odd_poly_D p) ->
+m2_l y_e y_o (nth_unit_root(2*n)) = evals (nth_unit_root (2*n)) (2*n-1) p.
 Proof.
 Admitted.
 (*
@@ -1132,30 +1182,27 @@ induction n.
     + *)
     
     
-    
-    
-    
-
-
 
 Lemma fft_correct: forall n p,
 degree_poly p = (2^n)%nat -> 
-fft n p (nth_unit_root(2^n%nat)) = evals(nth_unit_root (2^n)%nat) (2^n)%nat p.
+fft n p (nth_unit_root(2^n%nat)) = evals(nth_unit_root (2^n)%nat) (2^n-1)%nat p.
 Proof.
 induction n.
   - intros.
     simpl in *.
     assert(Pdense_eval p (nth_unit_root 1) = hd 0 p) by (apply FFT_base_case in H; auto).
-    replace (nth_unit_root 1 * 1) with (nth_unit_root 1) by lra.
-    rewrite -> H0.
+    rewrite -> degree_one_eval.
     destruct p.
-    + discriminate H.
-    + simpl in *.
+    (* case p = nil *) 
+    discriminate H.
+    (* case p = degree 1 *)
+    simpl in *.
       assert(p = nil).
       rewrite -> degree_add in H.
       assert(degree_poly p = O) by lia.
       apply degree_nil; auto.
-      rewrite -> H1; auto.
+      rewrite -> H1. 
+      all: auto.
   - intros.
     simpl.
 (* even poly degree *)
