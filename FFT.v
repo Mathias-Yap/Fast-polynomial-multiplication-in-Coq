@@ -267,6 +267,7 @@ end.
 Definition degree_poly (p:dense_poly) : nat :=
  degree_poly' O p.
 
+
 Lemma degree_succ: forall p n,
   S (degree_poly' n p) = degree_poly' (S n) p.
 Proof.
@@ -276,6 +277,16 @@ Proof.
     apply IHp. 
 Qed.
 
+Lemma degree_length: forall p,
+length p = degree_poly p.
+Proof.
+unfold degree_poly.
+induction p.
+  - simpl. auto.
+  - simpl. 
+    rewrite -> IHp.
+    apply degree_succ.
+Qed.
 Lemma degree_add: forall a p,
   degree_poly (a::p) = S(degree_poly p).
 Proof.
@@ -491,37 +502,15 @@ Proof.
 induction p. 
 - simpl. auto. 
 - intros. 
-  induction (fst a) eqn:fa.
-  + unfold sparse_to_dense.
-    simpl.
-    rewrite -> fa.
-    simpl.
-    rewrite -> pdense_eval_add.
-    rewrite <- IHp.
-    rewrite <- peval_std_succ.
-    unfold sparse_to_dense.
-    lra.
-    apply is_sorted_fst_cons_inv in H; auto.
-    Search(is_sorted_fst).
-    destruct p.
-    (* case p = nil *)
-    simpl. lia.
-    (* case p <> nil *)
-    apply is_sorted_fst_cons_lt in H.
-    simpl. rewrite <- fa.
-    lia.
-    apply is_sorted_fst_cons_inv in H; auto.
-  + unfold sparse_to_dense, Pdense_eval.
-    simpl.
-    rewrite -> fa.
-    simpl.
-    rewrite -> pdense_eval_scale.
-    rewrite <- IHp.
-    unfold sparse_to_dense.
-    induction n.
-    -- unfold Pdense_eval.
-       ring_simplify. simpl.
-       Abort.
+  Search(is_sorted_fst).
+  apply is_sorted_fst_cons_inv in H.
+  Search(PaxR_eval).
+  rewrite -> PaxR_eval_cons.
+  rewrite <- IHp by auto.
+  unfold sparse_to_dense.
+  unfold Pdense_eval.
+  simpl.
+  rewrite -> pdense_eval_step.
     
 (* unit root: cos((2*PI)/n) + i * sin ((2*PI)/n) = e^((2*PI*I)/n).*)  
 (* unit root properties: *)
@@ -545,20 +534,22 @@ match n with
   |S(n') => w_powers w n' ++ (w^n)::nil
 end.
 
-Lemma sum_mod_O: forall k j n,
-Nat.le j (n-1) -> n mod k = O -> 
-fold_right Rplus 0 (w_powers((nth_unit_root n^k))(j)) = n.
+Lemma nth_unit_root_pow_n: forall n,
+  (nth_unit_root (2*n)) ^ (2*n) = 1.
 Proof.
-Admitted.
+intros.
+replace (nth_unit_root (2 * n) ^ (2 * n)) with 
+(nth_unit_root (2 * n) ^ (n+n)).
+rewrite -> unit_root_symmetry.
+replace (- nth_unit_root (2 * n) ^ n) with (- nth_unit_root (2 * n) ^ (0+n)).
+rewrite -> unit_root_symmetry.
+lra.
+f_equal.
+f_equal. lia.
+Qed.
 
-Lemma sum_mod_else: forall k j n,
-Nat.le j (n-1) -> n mod k <> O ->
-fold_right Rplus 0 (w_powers((nth_unit_root n^k))(j)) = O.
-Proof.
-Admitted.
-(*Lemma unit_root_sums: forall n k j,
-k mod n <> 0 -> Nat.le j (n-1) -> 
-*)
+
+
 Lemma unit_root_squares: forall n,
 nth_unit_root(2*n)^2 = nth_unit_root(n).
 Proof.
@@ -1157,6 +1148,58 @@ Proof.
 Qed.
 
 
+Lemma nth_succ: forall l1 a0 a r l2,
+nth (S a0) (a :: l1) 0 = nth (S a0) (r :: l2) 0 ->
+nth a0 l1 0 = nth a0 l2 0.
+Proof.
+intros. simpl in H. auto.
+Qed.
+
+Lemma lt_to_all_nth: forall l1 l2,
+length l1 = length l2 ->
+(forall (a:nat), Nat.lt a (length l1) -> nth a l1 0 = nth a l2 0)
+-> (forall (a : nat), nth a l1 0 = nth a l2 0).
+Proof.
+intros.
+destruct (Nat.lt_ge_cases a (length l1)) as [Hlt | Hge].
+ - apply H0. auto.
+ - Search(nth).
+   rewrite -> nth_overflow by auto.
+   rewrite -> H in Hge.
+   rewrite -> nth_overflow by auto.
+   auto.
+Qed.
+   
+    
+          
+Lemma nth_eq: forall l1 l2,
+length l1 = length l2 ->
+  (forall (a : nat), nth a l1 0 = nth a l2 0) ->
+  l1 = l2.
+Proof.
+induction l1.
+  - intros.
+    simpl in H.
+    symmetry in H; apply length_zero_iff_nil in H.
+    auto.
+  - intros.
+    destruct l2.
+    simpl in H.
+    exfalso; lia.
+    
+    simpl in H.
+    f_equal.
+    specialize (H0 O).
+    simpl in H0. auto.
+    
+    apply IHl1.
+    lia.
+    
+    intros.
+    assert(nth (S a0) (a :: l1) 0 = nth (S a0) (r :: l2) 0).
+    apply H0.
+    apply nth_succ in H1. auto.
+Qed.
 
 Lemma m2_l_correct: forall n y_e y_o p,
 Nat.le 1 n -> degree_poly p = (2*n)%nat ->
@@ -1165,11 +1208,40 @@ y_o = evals (nth_unit_root (n)) (n-1) (odd_poly_D p) ->
 m2_l y_e y_o (nth_unit_root(2*n)) = evals (nth_unit_root (2*n)) (2*n-1) p.
 Proof.
 intros.
-assert (length (evals (nth_unit_root (2*n)) (2*n-1) p) = (2*n)%nat) 
-  by (rewrite -> evals_length_eq_n; lia).
-Search(nth).
 
-Admitted.
+assert(forall a, Nat.lt a (2*n) -> 
+nth a (m2_l y_e y_o (nth_unit_root(2*n))) 0= 
+nth a (evals (nth_unit_root (2*n)) (2*n-1) p) 0).
+intros. apply m2_l_nth_correct. all: auto.
+
+assert(length (m2_l y_e y_o (nth_unit_root (2 * n))) = (2*n)%nat).
+unfold m2_l.
+rewrite -> app_length.
+rewrite -> make_left_length.
+rewrite -> make_right_length.
+rewrite -> H1.
+rewrite -> evals_length_eq_n.
+lia.
+
+assert(forall a,
+nth a (m2_l y_e y_o (nth_unit_root(2*n))) 0= 
+nth a (evals (nth_unit_root (2*n)) (2*n-1) p) 0).
+apply lt_to_all_nth.
+rewrite -> H4.
+rewrite -> evals_length_eq_n.
+lia.
+rewrite <- degree_length in H0.
+
+rewrite -> H4.
+apply H3.
+
+apply nth_eq in H5.
+auto.
+rewrite -> H4.
+rewrite -> evals_length_eq_n.
+lia.
+Qed.
+
 
 
 Lemma pow_le_1: forall n,
@@ -1242,12 +1314,65 @@ Definition div_n (n:nat)(r:R) := r/n.
 Definition div_n_list (r:list R)(n:nat):=
 map (div_n  n) r.
 
-
-Lemma ievals: forall n p,
-degree_poly p = (2^n)%nat -> 
-ifft n (evals(nth_unit_root (2^n)%nat) (2^n)%nat p) = p.
+Lemma eval_at_1: forall p,
+length p = 1%nat ->
+Pdense_eval p 1 = hd 0 p.
 Proof.
-Admitted.
+intros.
+induction p.
+  - unfold Pdense_eval.
+    simpl.
+    auto.
+  - unfold Pdense_eval.
+    simpl.
+    simpl in H.
+    assert(length p = O) by lia.
+    apply length_zero_iff_nil in H0.
+    rewrite -> H0.
+    simpl.
+    lra.
+Qed.
+    
+
+
+
+Lemma ievals: forall a n p,
+degree_poly p = (2^n)%nat -> Nat.lt a (2^n) ->
+nth a (ifft n (evals(nth_unit_root (2^n)%nat) (2^n-1)%nat p)) 0 = 
+nth a p 0.
+Proof.
+unfold ifft.
+induction a.
+  - intros.
+    induction n.
+    + simpl in *.
+      rewrite <- degree_length in H.
+      rewrite -> eval_at_1.
+      destruct p.
+      all: simpl. 
+      all:auto.
+    + simpl.
+      Admitted.
+
+
+(*induction n.
+  - intros. 
+    simpl in *.
+    rewrite <- degree_length in H.
+    rewrite -> eval_at_1 by auto.
+    destruct p eqn:E.
+    + rewrite <- E in H.
+      apply length_zero_iff_nil in E.
+      exfalso; lia.
+    + simpl in *.
+      assert(length d = O) by lia.
+      apply length_zero_iff_nil in H0.
+      rewrite -> H0.
+      auto.
+  - intros.
+    simpl.*)
+
+
  
 
 Lemma icorrect : forall n p x,
@@ -1258,13 +1383,7 @@ Proof.
   induction n.
   - simpl. reflexivity.
   - intros. simpl.
-
-    replace (nth_unit_root (2 ^ n + (2 ^ n + 0)) *
-         (nth_unit_root (2 ^ n + (2 ^ n + 0)) * 1)) with (nth_unit_root(2^n)).
-    rewrite -> fft_correct.
-    rewrite -> fft_correct.
-    simpl in H. ring_simplify in H.
-    Search(m2_l).
+    
      Admitted.
 
 Fixpoint add_dense_poly (p1 p2: dense_poly): dense_poly :=
@@ -1455,43 +1574,53 @@ induction n.
           all: auto.
 Qed.
 
-Lemma nth_succ: forall l1 a0 a r l2,
-nth (S a0) (a :: l1) 0 = nth (S a0) (r :: l2) 0 ->
-nth a0 l1 0 = nth a0 l2 0.
+
+
+(* 
+Fixpoint evals (w:R)(n:nat)(p:dense_poly) :=
+  match n with
+  | O => Pdense_eval p (w ^ O) :: nil
+  | S(n') => evals w n' p ++ Pdense_eval p (w^n) :: nil 
+  end. *)
+
+Lemma pdense_eval_zeroes: forall n x,
+Pdense_eval (repeat 0 n) x = 0.
 Proof.
-intros. simpl in H. auto.
+induction n.
+  - intros. unfold Pdense_eval. auto. 
+  - intros. unfold Pdense_eval. simpl.
+    rewrite -> pdense_eval_scale.
+    rewrite -> IHn.
+    lra.
 Qed.
-    
+
+Lemma evals_inverse: forall a p n,
+length p = (2^n)%nat ->
+nth a (evals(1/nth_unit_root(2^n)%nat)(2^n-1)(
+ evals(nth_unit_root(2^n)%nat)(2^n-1)%nat p)) 0 =
+2^n * (nth a p 0).
+Proof.
+induction a.
+  - induction p.
+    + intros.
+      rewrite -> evals_correct by lia.
+      rewrite -> evals_nil.
+      simpl.
+      rewrite -> pdense_eval_add.
+      rewrite -> pdense_eval_zeroes.
+      lra.
+    + simpl.
+      
           
-Lemma nth_eq: forall l1 l2,
-length l1 = length l2 ->
-  (forall (a : nat), nth a l1 0 = nth a l2 0) ->
-  l1 = l2.
-Proof.
-induction l1.
-  - intros.
-    simpl in H.
-    symmetry in H; apply length_zero_iff_nil in H.
-    auto.
-  - intros.
-    destruct l2.
-    simpl in H.
-    exfalso; lia.
-    
-    simpl in H.
-    f_equal.
-    specialize (H0 O).
-    simpl in H0. auto.
-    
-    apply IHl1.
-    lia.
-    
-    intros.
-    assert(nth (S a0) (a :: l1) 0 = nth (S a0) (r :: l2) 0).
-    apply H0.
-    apply nth_succ in H1. auto.
-Qed.
-    
+         
+         Admitted.
+         
+       
+        
+
+       
+
+       
     
     
     
