@@ -436,7 +436,12 @@ end.
 
 Definition sparse_to_dense (p : list(nat*R)) : dense_poly :=
   sparse_to_dense' 0 p.
-    
+
+Lemma std_add: forall p n a,
+sparse_to_dense' n (a::p) = repeat 0 (fst a - n) ++ snd(a) :: sparse_to_dense' (S(fst a))p.
+Proof.
+intros. simpl. auto.
+Qed.
 Lemma std_step: forall p n a,
 is_sorted_fst p -> Nat.lt n (fst a) -> 
 sparse_to_dense' n (a::p) = 0::sparse_to_dense'(S n) (a::p).
@@ -477,6 +482,18 @@ destruct (fst(hd (O,0) p)) eqn: fa.
        auto.
 Qed.
 
+Lemma sorted_impl_nonzero:   forall a p,
+  p<>nil -> is_sorted_fst(a::p) -> Nat.lt(fst a)(fst (hd (1%nat, 0) p)).
+Proof.
+intros.
+destruct p.
+  - exfalso; auto.
+  - Search(is_sorted_fst).
+    apply is_sorted_fst_cons_lt in H0.
+    simpl.
+    lia.
+Qed.
+
 Lemma peval_std_succ: forall p n x,
 is_sorted_fst p -> Nat.lt n (fst (hd (1%nat,0) p)) -> 
 Pdense_eval(sparse_to_dense' n (p))x = x*Pdense_eval(sparse_to_dense'(S n) (p))x.
@@ -496,28 +513,87 @@ destruct (fst(hd (1%nat,0) p)) eqn: fa.
        lia.
 Qed.
 
+Lemma pdense_eval_zeroes: forall n x,
+Pdense_eval (repeat 0 n) x = 0.
+Proof.
+induction n.
+  - intros. unfold Pdense_eval. auto. 
+  - intros. unfold Pdense_eval. simpl.
+    rewrite -> pdense_eval_scale.
+    rewrite -> IHn.
+    lra.
+Qed.
+
+Lemma eval_zeroes_appended: forall n p x,
+Pdense_eval (repeat 0 n ++ p) x =
+x^n * Pdense_eval p x.
+Proof.
+unfold Pdense_eval.
+induction n.
+  - intros.
+    simpl.
+    lra.
+  - intros.
+    simpl.
+    rewrite -> pdense_eval_scale.
+    rewrite -> IHn.
+    lra.
+Qed.
+Lemma peval_scale: forall a p x,
+is_sorted_fst (a::p) -> 
+x ^ (fst a) * Pdense_eval' 0 (sparse_to_dense' (fst a) p) x =
+Pdense_eval' 0 (sparse_to_dense' 0 p) x.
+Proof.
+destruct p.
+- intros.
+  simpl.
+  lra.
+- intros.
+  simpl.
+  repeat rewrite -> eval_zeroes_appended.
+  ring_simplify.
+  rewrite <- pow_add.
+  rewrite -> Rmult_comm.
+  f_equal; f_equal.
+  Search((_+(_-_))%nat).
+  replace ((fst p - 0)%nat) with (fst p) by lia.
+  apply Arith_prebase.le_plus_minus_r_stt.
+  Search(is_sorted_fst).
+  apply is_sorted_fst_cons_lt in H.
+  lia.
+Qed.
+  
+
+       
 Lemma Peval_std': forall p x,
 is_sorted_fst p -> Pdense_eval (sparse_to_dense p) x = PaxR_eval p x.
 Proof.
-induction p. 
+induction p as [|a p]. 
 - simpl. auto. 
-- intros. 
-  Search(is_sorted_fst).
-  apply is_sorted_fst_cons_inv in H.
-  Search(PaxR_eval).
-  rewrite -> PaxR_eval_cons.
-  rewrite <- IHp by auto.
-  unfold sparse_to_dense.
-  unfold Pdense_eval.
-  simpl.
-  rewrite -> pdense_eval_step.
+- intros.
+  destruct p.
+  + unfold Pdense_eval, sparse_to_dense; simpl.
+    rewrite -> eval_zeroes_appended.
+    unfold Pdense_eval; simpl.
+    replace((fst a - 0)%nat) with (fst a) by lia.
+    ring.
+  + rewrite -> PaxR_eval_cons.
+    rewrite <- IHp by (apply is_sorted_fst_cons_inv in H; auto).
+    unfold sparse_to_dense, Pdense_eval.
+    rewrite -> std_add.
+    rewrite -> eval_zeroes_appended.
+    rewrite -> pdense_eval_add.
+    rewrite <- peval_std_succ.
+    ring_simplify.
+    replace(fst a - 0)%nat with (fst a) by lia.
+    rewrite -> peval_scale by auto.
+    lra.
+    (apply is_sorted_fst_cons_inv in H; auto).
+    apply sorted_impl_nonzero in H.
+    auto.
+    discriminate.
+Qed.
     
-(* unit root: cos((2*PI)/n) + i * sin ((2*PI)/n) = e^((2*PI*I)/n).*)  
-(* unit root properties: *)
-(* Lemma even_and_odd_D: forall p x,
- Pdense_eval (even_poly_D p) (x^2) + x*Pdense_eval(odd_poly_D p) (x^2) =
- Pdense_eval p x.
- Qed. *)
 Lemma unit_root_k_squares: forall n k,
 ((nth_unit_root (2*n))^k)^2 = (nth_unit_root n)^k.
 Proof.
@@ -1336,23 +1412,6 @@ Qed.
 
 
 
-Lemma ievals: forall a n p,
-degree_poly p = (2^n)%nat -> Nat.lt a (2^n) ->
-nth a (ifft n (evals(nth_unit_root (2^n)%nat) (2^n-1)%nat p)) 0 = 
-nth a p 0.
-Proof.
-unfold ifft.
-induction a.
-  - intros.
-    induction n.
-    + simpl in *.
-      rewrite <- degree_length in H.
-      rewrite -> eval_at_1.
-      destruct p.
-      all: simpl. 
-      all:auto.
-    + simpl.
-      Admitted.
 
 
 (*induction n.
@@ -1583,37 +1642,106 @@ Fixpoint evals (w:R)(n:nat)(p:dense_poly) :=
   | S(n') => evals w n' p ++ Pdense_eval p (w^n) :: nil 
   end. *)
 
-Lemma pdense_eval_zeroes: forall n x,
-Pdense_eval (repeat 0 n) x = 0.
+Definition degree_div(n:nat)(x:R) :=
+  (/n) * x.
+
+Definition ievals(w:R)(n:nat)(p:dense_poly) :=
+match n with
+| O => nil
+| n => map (degree_div n) (evals (/w) n p)
+end.
+
+Lemma degdiv_zero: forall n,
+degree_div n O = O.
 Proof.
-induction n.
-  - intros. unfold Pdense_eval. auto. 
-  - intros. unfold Pdense_eval. simpl.
-    rewrite -> pdense_eval_scale.
-    rewrite -> IHn.
-    lra.
+intros. simpl.
+unfold degree_div. lra.
+Qed.
+(*Lemma evals_correct: forall w n a p,
+Nat.le a n -> nth a (evals w n p) O = Pdense_eval p (w^a).*)
+Lemma ievals_ev: forall (w:R) n p a,
+0<w -> Nat.lt O n -> 
+Nat.le a n -> nth a (ievals w n p) O = (/n) * Pdense_eval p ((/w^a)).
+intros.
+unfold ievals.
+destruct n.
+  - exfalso; lia.
+  - rewrite <- degdiv_zero with(n:= S n).
+    Search(nth _ (map _ _) _).
+    rewrite -> map_nth.
+    unfold degree_div.
+    rewrite -> evals_correct by auto.
+    repeat f_equal.
+    rewrite -> pow_inv by lra.
+    auto.
 Qed.
 
-Lemma evals_inverse: forall a p n,
-length p = (2^n)%nat ->
-nth a (evals(1/nth_unit_root(2^n)%nat)(2^n-1)(
- evals(nth_unit_root(2^n)%nat)(2^n-1)%nat p)) 0 =
-2^n * (nth a p 0).
+Search(Pdense_eval).
+(*
+  pdense_eval_add:
+  forall (a : R) (p : list R) (x : R),
+  Pdense_eval (a :: p) x = a + x * Pdense_eval p x
+*)
+
+ (*
+  evals_correct:
+  forall (w : R) (n a : nat) (p : dense_poly),
+  Nat.le a n -> nth a (evals w n p) 0%nat = Pdense_eval p (w ^ a) 
+*)
+
+
+Lemma nth_evals_cons: forall w n p a f,
+Nat.le a n ->
+nth a (evals w n (f::p)) O = f + w^a * nth a (evals w n p) O.
 Proof.
+intros.
+repeat rewrite -> evals_correct by auto.
+rewrite -> pdense_eval_add.
+auto.
+Qed.
+
+      
+    
+Lemma evals_inverse: forall a p n,
+degree_poly p = n ->
+nth a (ievals (nth_unit_root n) n (evals (nth_unit_root n) n p)) O  = 
+nth a p O.
+Proof.
+unfold Pdense_eval.
 induction a.
   - induction p.
-    + intros.
-      rewrite -> evals_correct by lia.
-      rewrite -> evals_nil.
+    + intros. 
       simpl.
-      rewrite -> pdense_eval_add.
-      rewrite -> pdense_eval_zeroes.
+      rewrite <- degree_length in H.
+      assert(n = O) by auto.
+      rewrite -> H0.
+      simpl.
       lra.
-    + simpl.
-      
+    + intros.
+      unfold ievals.
+      destruct n.
+        * rewrite <- degree_length in H. exfalso.
+          simpl in H. lia.
+        * Search(nth _ (map _ _) _).
+          rewrite <- degdiv_zero with (n:= S n).
+          rewrite -> map_nth.
+          simpl.
+          Search(nth).
+          rewrite -> app_nth1.
+          rewrite -> evals_correct.
+          simpl; rewrite <- evals_succ.
+          unfold Pdense_eval, degree_div.
           
-         
-         Admitted.
+      
+      
+      
+      
+      
+
+    
+    
+      
+    
          
        
         
