@@ -1380,8 +1380,6 @@ induction n.
     all: auto.
 Qed.
 
-
-
 Definition ifft(n:nat)(p:list R):list R :=
   let w:= (1/n) * 1/nth_unit_root (2^n) in 
   fft n p w. 
@@ -1592,7 +1590,7 @@ induction n.
     apply IHn.
 Qed.
 
-Lemma mul_evals: forall a p1 p2 n w,
+Lemma nth_mul_evals: forall a p1 p2 n w,
 Nat.le a n -> 
 nth a (pointwise_mul(evals w n p1) (evals w n p2) n) 0 = 
 nth a (evals w n (naive_mult p1 p2)) 0.
@@ -1633,6 +1631,23 @@ induction n.
           all: auto.
 Qed.
 
+Lemma mul_evals: forall p1 p2 w n,
+pointwise_mul(evals w n p1)(evals w n p2) n =
+evals w n (naive_mult p1 p2).
+Proof.
+intros.
+assert(length (pointwise_mul (evals w n p1) (evals w n p2) n) = length(evals w n (naive_mult p1 p2))) by
+(rewrite -> pointwise_mul_length;
+ rewrite -> degree_length; rewrite -> eval_deg;
+ auto).
+apply nth_eq.
+auto.
+apply lt_to_all_nth.
+auto.
+intros.
+rewrite -> pointwise_mul_length in H0.
+apply nth_mul_evals; lia.
+Qed.
 
 
 (* 
@@ -1699,9 +1714,7 @@ repeat rewrite -> evals_correct by auto.
 rewrite -> pdense_eval_add.
 auto.
 Qed.
-
-      
-    
+(*
 Lemma evals_inverse: forall a p n,
 degree_poly p = n ->
 nth a (ievals (nth_unit_root n) n (evals (nth_unit_root n) n p)) O  = 
@@ -1730,9 +1743,295 @@ induction a.
           rewrite -> app_nth1.
           rewrite -> evals_correct.
           simpl; rewrite <- evals_succ.
-          unfold Pdense_eval, degree_div.
-          
+          unfold Pdense_eval, degree_div. *)
+
+
+
+Lemma eval_zeroes_end: forall p n x,
+Pdense_eval p x = Pdense_eval (p ++ repeat 0 n) x.
+Proof. 
+induction p.
+  - intros. simpl.
+    induction n.
+    + simpl. auto.
+    + simpl. rewrite -> pdense_eval_add.
+      rewrite <- IHn.
+      unfold Pdense_eval; simpl; lra.
+  - intros.
+    simpl.
+    repeat rewrite -> pdense_eval_add.
+    rewrite <- IHp.
+    auto.
+Qed.
+    
+Lemma naive_mult_padded: forall p1 p2 n x,
+Pdense_eval (naive_mult(p1 ++ repeat 0 n)(p2 ++ repeat 0 n)) x= 
+Pdense_eval (naive_mult p1 p2) x.
+Proof.
+intros.
+rewrite <- pmul_correct.
+unfold Pdense_eval.
+induction n.
+  - simpl.
+    repeat rewrite -> app_nil_r.
+    apply pmul_correct.
+  - intros. 
+    rewrite <- IHn.
+    repeat rewrite <- eval_zeroes_end.
+    lra.
+Qed.
+
+Lemma scalar_mult_length: forall a p,
+length p = length(scalar_mult a p).
+Proof.
+intros.
+induction p.
+  - simpl. auto.
+  - simpl. rewrite -> IHp. auto.
+Qed.
+Lemma add_poly_length: forall p1 p2,
+length p1 = length p2 ->
+length(add_dense_poly p1 p2) = length p1.
+Proof.
+induction p1.
+  - simpl. auto.
+  - intros.
+    rewrite -> add_cons.
+    simpl.
+    f_equal.
+    simpl in H.
+    Search(hd).
+    destruct p2.
+    + simpl in *. exfalso; lia.
+    + simpl in *. rewrite -> IHp1. auto. auto.
+Qed.
+
+Lemma add_poly_upper: forall p1 p2,
+Nat.le (length(add_dense_poly p1 p2)) (max(length p1)(length p2)).
+Proof.
+induction p1.
+  - intros.
+    simpl.
+    auto.
+  - intros.
+    induction p2.
+    + simpl. auto.
+    + simpl.
+      Search((S _<=S _)%nat).
+      rewrite <- Nat.succ_le_mono.
+      apply IHp1.
+Qed.
+
+Lemma add_poly_lower: forall p1 p2,
+Nat.le (max(length p1)(length p2)) (length(add_dense_poly p1 p2)) .
+Proof.
+induction p1.
+  - intros.
+    simpl.
+    auto.
+  - intros.
+    induction p2.
+    + simpl. auto.
+    + simpl.
+      Search((S _<=S _)%nat).
+      rewrite <- Nat.succ_le_mono.
+      apply IHp1.
+Qed.
       
+Lemma add_poly_length_max: forall p1 p2,
+length(add_dense_poly p1 p2) = max (length p1) (length p2).
+Proof.
+intros.
+apply Nat.le_antisymm.
+  -  apply add_poly_upper.
+  - apply add_poly_lower.
+Qed.
+
+Lemma add_poly_comm: forall p1 p2,
+add_dense_poly p1 p2 = add_dense_poly p2 p1.
+Proof.
+induction p1.
+  - simpl. destruct p2.
+    + simpl. auto.
+    + simpl. auto.
+  - simpl.
+    destruct p2.
+    + simpl. auto.
+    + simpl. rewrite -> IHp1. f_equal; lra.
+Qed. 
+
+Lemma naive_mult_length_gt_left: forall p1 p2,
+Nat.le 1 (length p2) ->
+Nat.le (length p1) (length(naive_mult p1 p2)).
+Proof.
+induction p1.
+  - intros. simpl in *. auto. 
+  - intros. simpl in *.
+    rewrite -> add_poly_length_max.
+    rewrite <- scalar_mult_length.
+    apply IHp1 in H.
+    simpl.
+    lia.
+Qed.
+
+Lemma naive_mult_length_gt_right: forall p1 p2,
+Nat.le 1 (length p1) ->
+Nat.le (length p2) (length(naive_mult p1 p2)).
+Proof.
+destruct p1.
+  - intros. exfalso; simpl in H; lia.
+  - intros. simpl in *.
+    rewrite -> add_poly_length_max.
+    rewrite <- scalar_mult_length.
+    lia.
+Qed.
+
+Lemma naive_mult_length: forall p1 p2,
+Nat.le 1 (length p1) ->
+Nat.le 1 (length p2) -> 
+length(naive_mult p1 p2) = (length p2 + length p1 - 1)%nat.
+Proof.
+intros.
+induction p1.
+  - simpl in H; exfalso; lia.
+  - destruct p1.
+    + simpl.
+      rewrite -> add_poly_length_max.
+      rewrite <- scalar_mult_length.
+      simpl. 
+      lia.
+    + simpl in *.
+      rewrite -> add_poly_length_max.
+      rewrite <- scalar_mult_length.
+      simpl.
+      rewrite -> IHp1 by lia.
+      lia. 
+Qed.
+      
+      
+Lemma evals_padded: forall p a n j,
+evals n j p  = evals n j (p++repeat 0 a).
+Proof.
+induction a.
+  - intros. simpl. rewrite -> app_nil_r; auto.
+  - intros.
+    induction j.
+    + simpl. replace(0:: repeat 0 a) with (repeat 0 (S a)) by auto.
+      rewrite <- eval_zeroes_end.
+      auto.  
+    + simpl. 
+      replace(0:: repeat 0 a) with (repeat 0 (S a)) by auto.
+      repeat rewrite <- eval_zeroes_end.
+      f_equal.
+      apply IHj.
+Qed.
+
+Lemma eval_mul_padded: forall a p1 p2 x,
+Pdense_eval(naive_mult(p1++repeat 0 a)(p2++repeat 0 a)) x = 
+Pdense_eval(naive_mult p1 p2) x.
+Proof.
+intros.
+rewrite <- pmul_correct.
+repeat rewrite <- eval_zeroes_end.
+apply pmul_correct.
+Qed.
+
+Lemma evals_mul_padded: forall n j p1 p2 a b,
+evals n j (naive_mult(p1++repeat 0 a)(p2++repeat 0 a))
+=
+evals n j (naive_mult p1 p2 ++ (repeat 0 b)).
+Proof.
+induction j.
+  - intros. simpl.
+    repeat rewrite -> eval_mul_padded. rewrite <- eval_zeroes_end. auto.
+  - intros. 
+    simpl.
+    rewrite -> IHj with (b:= b).
+    f_equal.
+    rewrite -> eval_mul_padded.
+    rewrite <- eval_zeroes_end.
+    auto.
+Qed.
+
+Lemma one_le_2pow: forall n,
+  (1 <= 2 ^ n)%nat.
+Proof.
+induction n.
+  - simpl. auto.
+  - simpl. apply le_trans with (m:= (2^n)%nat).
+    apply IHn.
+    lia.
+Qed.
+Definition dense_fast_mul(p1 p2: dense_poly)(n:nat):=
+let p1_pad := p1++(repeat 0 (2^n)%nat) in
+let p2_pad := p2++(repeat 0 (2^n)%nat) in
+ifft (S n) (pointwise_mul (fft (S n) p1_pad (nth_unit_root(2^(S n))%nat))
+                          (fft (S n) p2_pad (nth_unit_root(2^(S n))%nat)) 
+                          (2^(S n)-1)%nat).
+
+Lemma dense_fast_mul_correct: forall p1 p2 n x,
+  degree_poly p1 = (2^n)%nat -> degree_poly p1 = degree_poly p2 ->
+  Pdense_eval (dense_fast_mul p1 p2 n) x = 
+  Pdense_eval (naive_mult p1 p2)       x.
+Proof.
+intros.
+unfold dense_fast_mul.
+repeat rewrite <-degree_length in *.
+rewrite -> H in H0.
+assert(length (p1 ++ repeat 0 (2^n)%nat) = (2^(S n))%nat).
+  rewrite -> app_length. 
+  rewrite -> repeat_length.
+  simpl. lia.
+rewrite -> fft_correct by (rewrite -> degree_length in H1; auto).
+rewrite -> fft_correct.
+rewrite -> mul_evals.
+rewrite -> evals_mul_padded with (b:= 1%nat).
+rewrite <- fft_correct.
+rewrite -> icorrect.
+rewrite <- eval_zeroes_end.
+auto.
+(* degree of naive mult *)
+all: rewrite <- degree_length.
+all: simpl.
+rewrite -> last_length.
+rewrite -> naive_mult_length.
+rewrite -> H; rewrite <- H0.
+ring_simplify.
+rewrite -> Nat.sub_add.
+lia.
+apply Nat.le_trans with (m:= (2^n)%nat).
+apply one_le_2pow.
+lia.
+Search(Nat.le 1 _).
+rewrite -> H; apply pow_le_1.
+rewrite <- H0; apply pow_le_1.
+
+rewrite -> last_length.
+rewrite -> naive_mult_length.
+    
+rewrite -> H.
+rewrite <- H0.
+ring_simplify.
+rewrite -> Nat.sub_add.
+lia.
+apply Nat.le_trans with (m:= (2^n)%nat).
+apply one_le_2pow.
+lia.
+rewrite -> H.
+apply one_le_2pow.
+rewrite <- H0.
+apply one_le_2pow.
+rewrite -> app_length.
+rewrite <- H0.
+Search(length( repeat _ _)).
+rewrite -> repeat_length.
+lia.
+Qed.
+    
+
+
+
+
       
       
       
