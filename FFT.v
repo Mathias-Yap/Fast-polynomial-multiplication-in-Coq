@@ -5,6 +5,7 @@ Require Export Reals.
 Require Import Lia.
 Require Import Lra.
 Require Import Ring.
+
 Context `{F : Type} `{FltF : Float F}.
 Open Scope R_scope.
 Definition i := sqrt(-1).
@@ -144,6 +145,15 @@ Fixpoint PaxR_eval (p:list (nat*R)) (x:R) : R :=
     | fn :: p0 =>  ((snd fn) * (pow x (fst fn))) + PaxR_eval p0 x
     end.
 
+Definition el_sparse(x:R)(d:nat)(c: R): R :=
+  c * (pow x d).
+
+Definition sum_R(p:list R):R :=
+  fold_right Rplus 0 p.
+
+Definition sum_fun(p:list(nat*R))(f: (nat*R) -> R): R :=
+  sum_R (map (fun a => f a) p).
+
 Lemma PaxR_correct: forall p x,
  Pax_eval p x = PaxR_eval (PinjR p) x.
 Proof. 
@@ -151,7 +161,21 @@ Proof.
   - simpl; auto.
   - rewrite -> Pax_eval_cons.
       simpl; lra. 
-Qed. 
+Qed.
+
+Definition eval_sum_fun(p:list(nat*R)) x: R :=
+sum_fun p (fun a => el_sparse x (fst a)(snd a)).
+Lemma sum_eq_eval: forall p x,
+  eval_sum_fun p x= PaxR_eval p x.
+Proof.
+intros.
+induction p.
+  - simpl.
+    unfold sum_fun. simpl. auto.
+  - simpl.
+    unfold sum_fun. simpl. rewrite <- IHp.
+    unfold sum_fun. unfold el_sparse. auto.
+Qed.
 
 
 Lemma addR_recombination: forall p1 p2 x,
@@ -1408,30 +1432,6 @@ induction p.
 Qed.
     
 
-
-
-
-
-(*induction n.
-  - intros. 
-    simpl in *.
-    rewrite <- degree_length in H.
-    rewrite -> eval_at_1 by auto.
-    destruct p eqn:E.
-    + rewrite <- E in H.
-      apply length_zero_iff_nil in E.
-      exfalso; lia.
-    + simpl in *.
-      assert(length d = O) by lia.
-      apply length_zero_iff_nil in H0.
-      rewrite -> H0.
-      auto.
-  - intros.
-    simpl.*)
-
-
- 
-
 Lemma icorrect : forall n p x,
 degree_poly p = (2^n)%nat -> 
 Pdense_eval (ifft n (fft n p (nth_unit_root(2^n)))) x = Pdense_eval p x.
@@ -2028,17 +2028,154 @@ rewrite -> repeat_length.
 lia.
 Qed.
     
+Lemma evals_zeroes: forall a w n p,
+evals w n (p::repeat 0 a) = evals w n (p::nil).
+Proof.
+intros.
+induction n.
+  - simpl.
+    rewrite -> pdense_eval_add.
+    rewrite -> pdense_eval_zeroes.
+    rewrite -> pdense_eval_add.
+    unfold Pdense_eval; auto.
+  - repeat rewrite -> evals_succ.
+    repeat rewrite -> pdense_eval_add.
+    rewrite -> pdense_eval_zeroes.
+    rewrite -> IHn.
+    unfold Pdense_eval; auto.
+Qed.
+
+Lemma eval_zero: forall a w n,
+evals w n (repeat 0 a) = evals w n nil.
+Proof.
+intros.
+induction n.
+  - simpl. rewrite -> pdense_eval_zeroes.
+    unfold Pdense_eval; auto.
+  - repeat rewrite -> evals_succ.
+    rewrite <- IHn.
+    rewrite -> pdense_eval_zeroes.
+    unfold Pdense_eval; auto.
+Qed.
+    
+
+Lemma first_unit_root:
+nth_unit_root 1 = 1.
+Proof.
+Admitted.
+
+(*
+Fixpoint Pdense_eval'(d:nat) (p: dense_poly) (x:R) : R :=
+  match p with
+  | nil => 0
+  | fn :: p0 => fn * (pow x d) + Pdense_eval' (S d) p0 x
+  end.
+
+Definition Pdense_eval(p:dense_poly) (x:R) : R :=
+  Pdense_eval' 0 p x.
+Definition dense_to_sparse(p:dense_poly):list(nat*R) :=
+  dense_to_sparse' 0 p.
+*) 
+Search(sum).
+Fixpoint pdense_ieval' (d:nat) (p: dense_poly) (x:R) : R :=
+  match p with
+  | nil => 0
+  | fn:: p0 => fn * (/ pow x d) + pdense_ieval' (S d) p0 x
+  end.
+
+Definition pdense_ieval (p:dense_poly) (x:R): R :=
+ match p with
+  | nil => 0
+  | p   => let n := length p in 1/n * pdense_ieval' 0 p x
+  end.
+
+Lemma eval_ieval: forall a p n,
+Nat.le 1 n -> Nat.le a n -> Pdense_eval (evals (nth_unit_root n) n p) ((/nth_unit_root n)^a) =
+(nth a (evals (/nth_unit_root n) n (evals(nth_unit_root n) n p)) 0).
+Proof.
+intros.
+rewrite -> evals_correct by auto.
+auto.
+Qed.
+
+Search(ifft).
+(*
+Definition fun_poly(n:nat) := Fin.t n -> R.
+Check(fun_poly).
+
+Definition fun_from_dense(p: dense_poly): nat -> R :=
+  let l := length p in
+  fun n => match ((length p) - n)%nat with
+           |O => 0*n
+           |_ => nth n p 0
+           end.
 
 
 
 
-      
-      
-      
-      
+Fixpoint summation' (n: nat) (p:dense_poly) (f: nat -> R -> R) :=
+  match n with
+  | 0 => f n (hd 0 p)
+  | S n' => f n (hd 0 p) + summation' (n') (tl p) f
+  end.
+
+Definition summation (p:dense_poly) (f:nat -> R -> R) :=
+  let n := (length p) in 
+  summation' n (rev p) f.
+
+Lemma summation_step: forall p a f,
+  summation(a::p) f = f (S(length p)) a + summation p f.
+Proof.
+unfold summation.
+intros.
+simpl.
+destruct p.
+  - simpl. lra.
+  - replace(hd 0 (rev (r::p) ++ a :: nil)) with (last (r::p) 0).
+    simpl.
+    
+Lemma DFT_summation: forall p x,
+  summation p (fun n a => a*x^n) = Pdense_eval p x.
+Proof.
+intros.
+induction p.
+  - unfold summation, Pdense_eval.
+    simpl; lra.
+  - unfold summation, Pdense_eval.
+    simpl. *)
+
+Check(eval_sum_fun).
+Lemma evals_sum_fun: 
+evals w n p = map(eval_sum_fun .
+Lemma evals_inversed: forall a n p,
+Nat.le 1 n -> Nat.le a (n-1) ->
+nth a (evals (/nth_unit_root n) (n-1) (evals(nth_unit_root n) (n-1) p)) 0=
+n * nth a p 0.
+Proof.
+intros.
+rewrite -> evals_correct by auto.
+induction a.
+  - unfold Pdense_eval; simpl.
+
+    induction p.
+    + simpl.
+      rewrite -> evals_nil.
+      rewrite -> repeat_cons.
+      Search(Pdense_eval).
+      replace(0::nil) with (repeat 0 1%nat) by auto.
+      rewrite <- eval_zeroes_end.
+      rewrite -> pdense_eval_zeroes.
+      lra.
+    + simpl.
+      Abort.
+
+   
+         
 
     
     
+    
+(* type words here to prevent weird thing happening *)
       
     
          
