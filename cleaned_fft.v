@@ -6,6 +6,7 @@ Require Export Reals.
 Require Import Lia.
 Require Import Lra.
 Require Import Ring.
+
 From Coquelicot Require Import Complex.
 From Coquelicot Require Import Hierarchy.
 
@@ -395,6 +396,10 @@ nth_unit_root (2*n)^(k+n) = - (nth_unit_root (2*n))^k.
 Proof.
 Admitted.  
 
+Lemma unit_root_nonzero: forall n,
+(nth_unit_root(n)) <> 0.
+Proof.
+Admitted.
 Notation "\w_ n " := (nth_unit_root n) (at level 10, no associativity).
 
 (*follows from the symmetry of unit roots*)
@@ -1168,7 +1173,7 @@ Definition ifft(n:nat)(p:list C):list C :=
 
 Definition iDFT(p: list C) :=
   let n := length p in
-  map(fun x => 1/n * x) (evals (1/(\w_n)) (n-1) p).
+  map(fun x => 1/n * x) (evals (/(\w_n)) (n-1) p).
 
     
     
@@ -1620,7 +1625,7 @@ ifft (S n) (pointwise_mul' (fft (S n) (pad p1 (2^n)%nat) (\w_(2^(S n))%nat))
                    (fft (S n) (pad p2 (2^n)%nat) (\w_(2^(S n))%nat))(2^(S n)-1)%nat). 
                           
 
-Lemma dense_fast_mul_correct: forall p1 p2 n x,
+Lemma fast_pmul_correct: forall p1 p2 n x,
   length p1 = (2^n)%nat -> length p1 = length p2 ->
   (fast_pmul p1 p2 n)[x] = 
   (pmul p1 p2)       [x].
@@ -1706,6 +1711,676 @@ rewrite <- H0.
 rewrite -> repeat_length.
 lia.
 Qed.
+
+
+(*
+Lemma cast_from_reals: forall x p1 p2,
+  RtoC(Pdense_eval p1 x * Pdense_eval p2 x) =
+  (pmul (poly_RtoC p1) (poly_RtoC p2))[RtoC x].
+Proof.
+intros.
+rewrite <- pmul_correct.
+repeat rewrite <- poly_RtoC_correct.
+apply c_proj_eq.
+all:simpl.
+all:lra.
+Qed.
+
+Lemma poly_RtoC_length: forall p,
+length(poly_RtoC p) = length p.
+Proof.
+induction p.
+simpl. auto.
+simpl. auto.
+Qed.
+
+Lemma extended: forall n x p1 p2,
+length p1 = (2^n)%nat -> length p1 = length p2
+->
+RtoC(Pdense_eval p1 x * Pdense_eval p2 x) =
+(fast_pmul(poly_RtoC p1)(poly_RtoC p2)(n))[RtoC x].
+Proof.
+intros.
+rewrite -> fast_pmul_correct.
+apply cast_from_reals.
+rewrite -> poly_RtoC_length; auto.
+repeat rewrite -> poly_RtoC_length; auto.
+Qed.
+Search(poly_RtoC).
+
+
+Definition poly_CtoR(p:dense_cpoly): dense_poly :=
+ map(Cmod) p.
+Lemma lol: forall x p1 p2,
+Pdense_eval(poly_CtoR(pmul(poly_RtoC p1)(poly_RtoC p2))) x =
+(Pdense_eval p1 x * Pdense_eval p2 x)%R.
+Proof.
+intros.
+pose proof cast_from_reals.
+
+Lemma dense_fast_mul_real_result: forall p1 p2 n x,
+  length p1 = (2^n)%nat -> length p1 = length p2 ->
+  (fast_pmul p1 p2 n)[x] =
+  (pmul p1 p2)   	[x]. *)
+
+
+
+Search(fold_right).
+Definition indexed_poly := list(nat*C).
+Definition index_poly(p: dense_cpoly) :=
+let s := seq 0 (length p) in
+  combine s p.
+Notation "\index_ p" := (index_poly p)(at level 10).
+Definition eval_term(x:C)(term: nat * C) : C :=
+  let(n, c) := term in
+    c*(x^n).
+
+Definition sum_eval'(x:C)(p:dense_cpoly) :=
+sum_n(fun c => p`_c*x^c)(length p).
+
+Definition sum_eval (x:C)(p:dense_cpoly) :=
+sum_n(fun c => p`_c*x^c)(length p-1).
+
+Lemma sum_n_eq_m_n: forall (f: nat -> C) n,
+sum_n f n = sum_n_m f 0 n.
+Proof.
+induction n.
+  - rewrite -> sum_n_n.
+    rewrite -> sum_O.
+    auto.
+  - rewrite -> sum_Sn.
+    rewrite -> sum_n_Sm by lia.
+    rewrite -> IHn.
+    auto.
+Qed.
+
+Lemma sum_n_mult_r_C : forall (a : C) (u : nat -> C) (m : nat),
+    sum_n (fun k => Cmult (u k) a) m = Cmult (sum_n u m) a.
+Proof.
+intros.
+induction m.
+    repeat rewrite -> sum_O.
+    auto.
+    { rewrite -> sum_Sn by lia.
+      rewrite -> IHm.
+      rewrite -> sum_Sn by lia.
+      apply c_proj_eq.
+      simpl. lra.
+      simpl. lra.
+    }
+Qed.
+
+Lemma sum_ev_add: forall p a x,
+  sum_eval' x (a :: p) = a + x * sum_eval' x p.
+Proof.
+ intros.
+ unfold sum_eval'.
+ repeat rewrite -> sum_n_eq_m_n.
+ replace(length(a::p)) with (S(length p)) by auto.
+ replace(a) with ((a::p)`_(O)*x^O).
+ rewrite -> sum_Sn_m.
+ simpl.
+ rewrite <- sum_n_m_S.
+ repeat rewrite <- sum_n_eq_m_n.
+ assert(x * sum_n (fun c : nat => nth c p 0 * x ^ c) (length p) =
+        sum_n(fun c: nat => nth c p 0 * x^c * x) (length p)).
+ rewrite -> sum_n_mult_r_C.
+ ring.
+ rewrite -> H.
+ rewrite -> sum_n_ext with (b:= (fun c : nat => nth c p 0 * x ^ c * x)).
+ apply c_proj_eq.
+ simpl. lra.
+ simpl. lra.
+ { intros. simpl. ring. }
+  lia.
+  simpl. ring.
+Qed.
+
+Lemma sum_evalc_ev: forall x p,
+sum_eval' x p = sum_eval x p.
+Proof.
+unfold sum_eval, sum_eval'.
+intros.
+induction (length p) eqn: e.
+  - simpl. auto.
+  - rewrite -> sum_Sn.
+    rewrite -> nth_overflow by lia.
+    replace(0 * x^S n) with (RtoC 0) by ring.
+    simpl.
+    replace(n-0)%nat with n by lia.
+    apply c_proj_eq.
+    all: simpl.
+    all: try lra.
+Qed.
+    
+
+Lemma sum_ev_eq: forall x p,
+sum_eval x p = p[x].
+Proof.
+intros.
+rewrite <- sum_evalc_ev.
+induction p.
+  - unfold sum_eval'. 
+    simpl.
+    rewrite -> sum_O.
+    unfold complex_eval.
+    simpl. ring.
+  - rewrite -> complex_add.
+    rewrite <- IHp.
+    simpl.
+    rewrite -> sum_ev_add.
+    auto.
+Qed.
+Lemma DFT_correct: forall p a,
+Nat.lt a (length p) ->
+DFT p`_a = p[\w_(length p)^a].
+Proof.
+intros.
+unfold DFT.
+rewrite -> evals_correct by lia.
+auto.
+Qed.
+
+
+Lemma sum_eval_scalar: forall p m x a,
+sum_n(fun c => p`_c*x^c) m * a = sum_n(fun c => p`_c*x^c*a) m.
+Proof.
+intros.
+rewrite <- sum_n_mult_r_C.
+auto.
+Qed. 
+
+
+
+  
+Lemma transform_roots: forall k c j n, 
+(\w_ (n) ^ c) ^ k * ((/ \w_ (n)) ^ j) ^ c =
+       ((\w_n)^(c*k))/((\w_n)^(c*j)).
+Proof.
+intros.
+repeat rewrite <- Cpow_mult_r.
+rewrite -> Cpow_inv.
+replace(j*c)%nat with (c*j)%nat by lia.
+Search(_*/_)%R.
+apply c_proj_eq.
+simpl. lra.
+simpl. lra.
+apply unit_root_nonzero.
+Qed.
+
+(*
+Lemma DFT_correct: forall p a,
+Nat.lt a (length p) ->
+DFT p`_a = p[\w_(length p)^a]. *)
+
+
+Lemma sum_term_out_funs: forall n m (f: nat -> C)(u: nat -> nat -> C),
+sum_n(fun j0 : nat => sum_n (fun i : nat =>(f j0) * (u i j0)) (m)) (n) 
+=
+sum_n(fun j0: nat => (f j0) * (sum_n (fun i : nat => (u i j0)) m)) n.
+Proof.
+induction n.
+  - intros.
+    repeat rewrite -> sum_O.
+    rewrite -> Cmult_comm.
+    rewrite <- sum_n_mult_r_C.
+    f_equal.
+    apply functional_extensionality.
+    intros. ring.
+  - intros.
+    repeat rewrite -> sum_Sn.
+    rewrite <- IHn.
+    f_equal.
+    rewrite -> Cmult_comm.
+    rewrite <- sum_n_mult_r_C.
+    f_equal.
+    apply functional_extensionality; intros; ring.
+Qed.
+
+Lemma nonzeroes_pow: forall (n:C) m,
+n <> 0 -> n^m <> 0.
+Proof.
+intros.
+induction m.
+  - simpl. apply C1_nz.
+  - simpl.
+    Search(_*_<>_).
+    apply Cmult_neq_0.
+    all: auto.
+Qed.
+
+Lemma sum_n_const_C: forall n (a: C),
+sum_n(fun _ => a)n = (S n)* a.
+Proof.
+intros.
+induction n.
+  rewrite -> sum_O. 
+  simpl. ring.
+  
+  rewrite -> sum_Sn.
+  rewrite -> IHn.
+  apply c_proj_eq.
+  all:simpl.
+  all:lra.
+Qed.
+
+
+  
+    
+
+Lemma inner_sum_1: forall n j j0,
+Nat.le 1 n -> j = j0 ->
+sum_n (fun i : nat =>(\w_ (n) ^ i) ^ j0 * ((/ \w_ (n)) ^ j) ^ i)(n-1)=
+RtoC (n).
+Proof.
+intros.
+rewrite -> H0.
+rewrite -> sum_n_ext with (b:= fun i => ((\w_n)^(i*j0)%nat */ ((\w_n)^(i*j0)%nat))).
+rewrite -> sum_n_ext with (b:= fun i => RtoC 1).
+induction n.
+  - exfalso; lia. 
+  - simpl.
+    replace(n-0)%nat with n by lia.
+    Search(sum_n).
+    rewrite -> sum_n_const_C.
+    simpl.
+    ring.
+
+    { intros.
+      apply Cinv_r. 
+      apply nonzeroes_pow. 
+      apply unit_root_nonzero. }
+
+    intros.
+    apply transform_roots.
+Qed.
+
+    
+Lemma sum_w_to_O: forall n k,
+Nat.le 1 k -> Nat.lt k n ->
+sum_n(fun j => \w_(n)^(j*k))(n-1)%nat = RtoC(0).
+Proof.
+Admitted.
+
+Lemma inner_sum_zero: forall j j0 n,
+Nat.lt j n -> Nat.lt j0 n ->
+j <> j0 ->
+sum_n (fun i : nat =>(\w_ (n) ^ i) ^ j0 * ((/ \w_ (n)) ^ j) ^ i)(n-1)
+= RtoC 0.
+Proof.
+Admitted.
+    
+   
+Definition delta(n m : nat) : C :=
+if Nat.eqb n m then 1 else 0.
+
+Lemma delta_1: forall a,
+delta a a = 1.
+Proof.
+intros.
+unfold delta.
+assert(a =? a = true).
+rewrite -> Nat.eqb_eq. lia.
+rewrite -> H.
+auto.
+Qed.
+
+Lemma delta_0: forall a b,
+a <> b -> delta a b = 0.
+Proof.
+intros.
+unfold delta.
+assert(a =? b = false).
+rewrite -> Nat.eqb_neq.
+lia.
+rewrite -> H0.
+auto.
+Qed.
+
+Lemma inner_sum_diroc: forall n j0 j,
+Nat.lt j n -> Nat.lt j0 n -> Nat.le 1 n ->
+sum_n (fun i : nat => (\w_ n ^ i) ^ j0 * ((/ \w_ n) ^ j) ^ i) (n-1)
+= 
+delta j0 j * (n)
+.
+Proof.
+intros.
+destruct (Nat.eq_dec j j0).
+ { (* equal *)
+   rewrite -> inner_sum_1 by auto.
+   symmetry in e.
+   apply Nat.eqb_eq in e.
+   unfold delta.
+   rewrite -> e.
+   ring_simplify.
+   auto. }
+  apply inner_sum_zero with (n:= n) in n0 as H2.
+  rewrite -> H2.
+  apply Nat.eqb_neq in n0.
+  unfold delta.
+  rewrite -> Nat.eqb_sym in n0.
+  rewrite -> n0.
+  ring_simplify.
+  auto.
+  all: lia.
+Qed.
+
+Lemma delta_zero_sum: forall a,
+sum_n(fun j : nat => delta j 0) a = RtoC 1.
+Proof.
+intros.
+induction a.
+  - rewrite -> sum_O.
+    rewrite -> delta_1 by lia.
+    auto.
+  - rewrite -> sum_Sn.
+    rewrite -> IHa.
+    rewrite -> delta_0 by lia.
+    unfold plus; simpl; ring.
+Qed.
+
+Lemma sum_delta_out_range: forall a b,
+Nat.lt a b ->
+sum_n (fun j : nat => delta b j) (a) = RtoC 0.
+Proof.
+intros.
+rewrite -> sum_n_ext_loc with (b:= fun _ => RtoC 0).
+rewrite -> sum_n_const_C.
+ring_simplify.
+auto.
+intros.
+assert(n <> b) by lia.
+rewrite -> delta_0 by lia.
+auto.
+Qed.
+
+Lemma sum_delta_in_range: forall a b,
+Nat.lt a b ->
+sum_n (fun j : nat => delta a j) b = RtoC 1.
+Proof.
+intros.
+induction b.
+  - exfalso; lia.
+  - rewrite -> sum_Sn.
+    destruct (Nat.lt_ge_cases a (b)).
+    { rewrite -> IHb by lia.
+      rewrite -> delta_0 by lia.
+      unfold plus; simpl.
+      ring. }
+    { assert(a = b) by lia.
+      rewrite -> delta_0 by lia.
+      destruct b.
+      rewrite -> sum_O.
+      rewrite -> H1.
+      rewrite -> delta_1 by lia.
+      unfold plus; simpl; ring.
+      
+      rewrite -> sum_Sn.
+      rewrite -> sum_delta_out_range by lia.
+      rewrite <- H1.
+      rewrite -> delta_1 by lia.
+      unfold plus; simpl; ring. }
+Qed.
+
+Lemma sum_split: forall n a (f:nat -> C),
+Nat.lt a n ->
+sum_n(fun i: nat => f i) n = sum_n_m(fun i: nat => f i) 0 a +
+                             sum_n_m(fun i: nat => f i)(S a) n.
+Proof.
+induction n.
+  - intros.
+    exfalso; lia. 
+  - intros.
+    destruct(Nat.lt_ge_cases a n).
+    + rewrite -> sum_Sn.
+      rewrite -> IHn with (a:=a) by lia .
+      rewrite -> sum_n_Sm.
+      unfold plus; simpl.
+      ring. lia.
+    + assert(a = n) by lia.
+      rewrite -> H1.
+      rewrite -> sum_n_n.
+      rewrite -> sum_Sn.
+      unfold plus; simpl.
+      rewrite -> sum_n_eq_m_n.
+      ring.
+Qed.
+
+    
+Lemma sum_of_delta: forall (p:dense_cpoly) j,
+Nat.lt j (length p) ->
+sum_n (fun j0 : nat => nth j0 p 0 * delta j0 j) (length p-1)%nat =
+      nth j p 0.
+Proof.
+intros.
+destruct j.
+  - rewrite -> sum_n_eq_m_n.
+    rewrite -> sum_Sn_m by lia.
+    rewrite -> sum_n_m_ext_loc with (b:= fun _ => zero).
+    rewrite -> delta_1 by lia.
+    rewrite -> sum_n_m_const_zero.
+    unfold plus, zero; simpl.
+    ring.
+    { intros.
+      unfold zero; simpl.
+      assert(k <> O) by lia.
+      rewrite -> delta_0 by lia.
+      ring. }
+  
+  -   destruct(Nat.lt_ge_cases (S j) (length p-1)).
+      rewrite -> sum_split with (a:= (S j)).
+      rewrite <- sum_n_eq_m_n.
+      rewrite -> sum_split with (a:= (j)%nat).
+      rewrite -> sum_n_n.
+      rewrite -> delta_1 by lia.
+      rewrite <- sum_n_eq_m_n.
+      rewrite -> sum_n_ext_loc with (b:= fun _ => RtoC(0)).
+      rewrite -> sum_n_m_ext_loc with (b:= fun _ => zero).
+      rewrite -> sum_n_const_C.
+      rewrite -> sum_n_m_const_zero.
+      unfold zero; simpl.
+      ring_simplify.
+      auto.
+       { intros.
+         assert(k <> j) by lia.
+         rewrite -> delta_0 by lia.
+         unfold zero; simpl.
+         ring. }
+       { intros.
+         assert(n <> S j) by lia.
+         rewrite -> delta_0 by lia.
+         ring_simplify.
+         auto. }
+      lia. apply H0.
+
+    assert(S j = (length p - 1)%nat) by lia.
+    rewrite <- H1.
+    rewrite -> sum_Sn.
+    rewrite -> sum_n_ext_loc with (b:= fun _ => RtoC 0).
+    rewrite -> sum_n_const_C.
+    rewrite -> delta_1 by lia.
+    unfold plus; simpl.
+    ring.
+    { intros.
+      assert(n <> S j) by lia.
+      rewrite -> delta_0 by lia.
+      ring_simplify.
+      reflexivity. }
+Qed.
+  
+Lemma evals_inversed: forall j n p,
+(n)%nat = length p ->Nat.lt j (n)%nat ->
+nth j (evals (/nth_unit_root (n)%nat) (n-1)%nat (DFT p)) 0=
+n * nth j p 0.
+Proof.
+intros.
+rewrite -> evals_correct by lia.
+rewrite <- sum_ev_eq.
+unfold sum_eval.
+unfold DFT.
+rewrite <- H.
+rewrite -> sum_n_ext_loc with (b:= fun c : nat =>
+                             p[\w_(n)^c] * (((/ \w_ (n)) ^ j) ^ c)).
+rewrite -> sum_n_ext with (b:=  fun c : nat =>
+                              sum_eval(\w_(n)^c) p * ((/ \w_ (n)) ^ j) ^ c).
+unfold sum_eval.
+rewrite <- H.
+rewrite -> evals_length_eq_n.
+replace(S (n-1)-1)%nat with (n-1)%nat by lia.
+rewrite -> sum_n_ext with (b:=(fun c : nat => 
+                         sum_n (fun c0 : nat => nth c0 p 0 * ((\w_ (n) ^ c) ^ c0 *
+                          (( / \w_ (n)) ^ j) ^ c)) (n-1))).
+rewrite -> sum_n_switch.
+rewrite -> sum_term_out_funs.
+rewrite -> sum_n_ext_loc with (b:= fun j0 : nat =>
+                           nth j0 p 0 * delta j0 j * n).
+rewrite -> sum_n_mult_r_C.
+rewrite -> Cmult_comm.
+f_equal.
+
+    rewrite <- sum_of_delta.
+    rewrite <- H. 
+    auto.
+    rewrite <- H.
+    lia.
+
+{ intros.
+  replace (nth n0 p 0 * delta n0 j * n) with (nth n0 p 0 * (delta n0 j * n)) by ring.
+  f_equal.
+  rewrite -> inner_sum_diroc.
+  auto. all: lia. }
+  
+{ intros.
+  rewrite <- sum_n_mult_r_C.
+  f_equal.
+  apply functional_extensionality.
+  intros.
+  ring. }
+{ intros.
+  rewrite -> sum_ev_eq.
+  auto. }
+{ intros.
+  rewrite -> evals_length_eq_n in H1.
+  rewrite -> evals_correct by lia.
+  auto.
+}
+Qed.
+  
+    
+
+
+
+
+(*
+Print map.
+Definition term_list(p:dense_cpoly)(x:C): list C :=
+map(fun c => eval_term x c)(\index_p).
+
+Definition sum_terms (p: list C) :=
+fold_right(fun term acc => term + acc)(RtoC 0) p.
+
+Fixpoint term_lists(p:dense_cpoly)(x:C)(n:nat): list(list C) :=
+match n with
+| O     => term_list p (x^n)::nil
+| S(n') => term_lists p x n' ++ term_list p (x^n)::nil
+end.
+
+Lemma term_lists_inversed: forall p x n,
+term_lists((term_lists p x n))(1/x)(n) = p.
+
+
+Definition sum_eval(x:C)(p:indexed_poly):=
+fold_right(fun term acc => Cplus(eval_term x term) acc) (RtoC 0) p.
+
+
+
+Lemma sum_eval_seq_scale: forall p n x,
+fold_right (fun (term : nat * C) (acc : C) => eval_term x term + acc) 0
+  (combine (seq (S n) (length p)) p) =
+x * fold_right (fun (term : nat * C) (acc : C) => eval_term x term + acc) 0
+  (combine (seq n (length p)) p).
+Proof.
+induction p.
+ - intros.
+    simpl.
+    ring.
+  - intros.
+    simpl.
+    ring_simplify.
+    f_equal.
+    rewrite <- IHp.
+    auto.
+Qed.
+
+Lemma sum_eval_add: forall a p x,
+sum_eval x (\index_(a::p)) = a + x*(sum_eval x (\index_p)).
+Proof.
+intros.
+simpl.
+f_equal.
+ring.
+unfold sum_eval.
+apply sum_eval_seq_scale.
+Qed.
+
+
+
+Lemma sum_eval_eq_eval: forall p x,
+sum_eval x (index_poly p) = p[x].
+Proof.
+induction p.
+  - intros. 
+    unfold complex_eval; simpl.
+    auto.
+  - intros.
+    rewrite -> sum_eval_add.
+    rewrite -> IHp.
+    rewrite -> complex_add; auto.
+Qed.
+
+Lemma horner_poly: forall p x,
+sum_eval x (\index_p) = p`_0 + x*(sum_eval x (\index_(tl p))).
+Proof.
+intros.
+induction p.
+  - simpl. ring.
+  - rewrite -> sum_eval_add.
+    simpl.
+    auto.
+Qed.
+
+Lemma tl_nth_p: forall n p,
+p`_(S n) = (tl p)`_n.
+Proof.
+induction p.
+simpl. destruct n.
+all: auto.
+Qed.
+
+Lemma DFT_correct: forall p a,
+Nat.lt a (length p) ->
+DFT p`_a = p[\w_(length p)^a].
+Proof.
+intros.
+unfold DFT.
+rewrite -> evals_correct by lia.
+auto.
+Qed.
+
+Lemma DFT_inversed: forall p a n,
+(2*n)%nat = length p -> Nat.lt a (2*n)%nat ->
+sum_eval(\w_(2*n)^a)(\index_(DFT p)) = n * p`_a.
+Proof.
+induction p.
+  { intros.
+    simpl. destruct a.
+   all: unfold complex_eval; simpl.
+   all: ring. }
+  { intros.
+    rewrite -> horner_poly.
+    rewrite -> DFT_correct. 
+    simpl. *)
+      
 
 
 
