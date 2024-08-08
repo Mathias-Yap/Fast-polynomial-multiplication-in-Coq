@@ -318,10 +318,10 @@ Qed.
 Definition dense_cpoly:= list C.
 
 (* casting a real polynomial into a complex one *)
-Fixpoint poly_RtoC(p:dense_poly): dense_cpoly:=
+Fixpoint p_RtoC(p:dense_poly): dense_cpoly:=
   match p with
   | nil => nil
-  | fn::p' => RtoC(fn)::poly_RtoC(p')
+  | fn::p' => RtoC(fn)::p_RtoC(p')
   end.
 
 (* evaluation helper function *)
@@ -366,9 +366,15 @@ all: simpl.
 all: lra.
 Qed.
 
-Lemma poly_RtoC_correct: forall p x,
-RtoC(Pdense_eval p x) = (poly_RtoC p)[x].
+Definition poly_eq(p1:dense_poly)(p2: dense_cpoly) :=
+ forall x:R, RtoC(Pdense_eval p1 x) = p2[RtoC x].
+
+Search(RtoC _ = _%R).
+Lemma poly_RtoC_eq: forall p,
+poly_eq(p)(p_RtoC p).
 Proof.
+intros.
+unfold poly_eq.
 intros.
 unfold Pdense_eval, complex_eval.
 induction p.
@@ -442,26 +448,26 @@ ring.
 Qed.
 
 (* returns the even decomposition of a polynomial *)
-Fixpoint even_poly_C'(d:nat)(p:dense_cpoly): dense_cpoly :=
+Fixpoint even_poly'(d:nat)(p:dense_cpoly): dense_cpoly :=
  match p with
   | nil => nil
-  | a1::p' => if Nat.even(d) then a1::even_poly_C' (S d) p' else even_poly_C'(S d) p'
+  | a1::p' => if Nat.even(d) then a1::even_poly' (S d) p' else even_poly'(S d) p'
   end.
 
 (* returns the odd decomposition of a polynomial *)
-Fixpoint odd_poly_C'(d:nat)(p:dense_cpoly): dense_cpoly :=
+Fixpoint odd_poly'(d:nat)(p:dense_cpoly): dense_cpoly :=
   match p with
   | nil => nil
-  | a1::p' => if Nat.odd(d) then a1::odd_poly_C'(S d) p' else odd_poly_C'(S d) p'
+  | a1::p' => if Nat.odd(d) then a1::odd_poly'(S d) p' else odd_poly'(S d) p'
 end.
 
 
-Notation "\even_ p " := (even_poly_C' 0 p)(at level 10).
-Notation "\odd_ p " := (odd_poly_C' 0 p)(at level 10).
+Notation "\even_ p " := (even_poly' 0 p)(at level 10).
+Notation "\odd_ p " := (odd_poly' 0 p)(at level 10).
 
 (* helper lemma to prove correctness of the decomposition*)
 Lemma even_succ_odd:  forall p n,
-even_poly_C' n p = odd_poly_C' (S n) p.
+even_poly' n p = odd_poly' (S n) p.
 Proof. 
   intros p; induction p. 
      - auto. 
@@ -473,7 +479,7 @@ Proof.
 Qed.
 (* helper lemma to prove correctness of the decomposition*)
 Lemma odd_succ_even:  forall p n,
-odd_poly_C' n p = even_poly_C' (S n) p.
+odd_poly' n p = even_poly' (S n) p.
 Proof.
   intros p; induction p. 
      - auto. 
@@ -681,8 +687,8 @@ induction n.
      rewrite -> H0; auto.
 Qed.
 
-Lemma evals_correct: forall w n a p,
-Nat.le a n -> (evals w n p)`_a = p[w^a].
+Lemma evals_correct: forall x n a p,
+Nat.le a n -> (evals x n p)`_a = p[x^a].
 Proof.
 induction p.
   - intros; simpl.
@@ -1174,7 +1180,7 @@ induction n.
     apply pow_le_1.
 
 Qed.
-
+Print nth.
 Definition sum_eval'(x:C)(p:dense_cpoly) :=
 sum_n(fun c => p`_c*x^c)(length p).
 
@@ -2328,6 +2334,8 @@ rewrite -> repeat_length.
 lia.
 Qed.
 
+Check(RtoC 0).
+Print C.
 
 (*
 Lemma cast_from_reals: forall x p1 p2,
