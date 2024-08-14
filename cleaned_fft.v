@@ -402,20 +402,53 @@ nth_unit_root (2*n)^(k+n) = - (nth_unit_root (2*n))^k.
 Proof.
 Admitted.  
 
+
 Lemma unit_root_nonzero: forall n,
 (nth_unit_root(n)) <> 0.
 Proof.
 Admitted.
 
-Lemma unit_root_inverse: forall n k,
-Nat.le k n ->
-(/ (nth_unit_root n^k) = (nth_unit_root n ^ (n-k))).
-Proof.
-Admitted.
+
 
 
 Notation "\w_ n " := (nth_unit_root n) (at level 10, no associativity).
 
+Lemma inverse_unit_root: forall n,
+\w_ (2 ^ n) ^ (2 ^ n - 1) = / \w_ (2 ^ n).
+Proof.
+Admitted.
+
+Lemma even_powered_n_symmetry: forall n a e,
+- \w_ (2*n) ^ (a * S (2 * e)) =
+- \w_ (2*n) ^ (a * S (2 * e) + 2 * e * n).
+Proof.
+intros.
+induction e.
+  - f_equal; f_equal. lia.
+  - replace(a * S (2 * S e))%nat with(a * (S (2 * e)+2))%nat by lia.
+    replace(a * (S (2 * e) + 2))%nat with (2*a + a*(S (2*e)))%nat by lia.
+    Search(_ ^(_+_)).
+    rewrite -> Cpow_add_r.
+    ring_simplify.
+    replace(-1 * \w_ (2*n) ^ (2 * a) * \w_ (2*n) ^ (a * S (2 * e))) with 
+    ( - \w_ (2*n) ^ (a * S (2 * e))* \w_ (2*n) ^ (2 * a)) by ring.
+    rewrite -> IHe.
+    ring_simplify.
+    replace(-1 * \w_ (2 * n) ^ (2 * a + a * S (2 * e) + 2 * S e * n)) with
+     (-1 * \w_ (2 * n) ^ (a * S (2 * e) + 2 * S e * n)*\w_ (2 * n) ^ (2 * a)).
+    f_equal. f_equal.
+    replace(a * S (2 * e) + 2 * S e * n)%nat with (((a * S (2 * e) + 2 * e * n) + n) + n)%nat by lia.
+    repeat rewrite -> unit_root_symmetry.
+    ring_simplify.
+    auto.
+    Search(_(_^_)).
+    replace(-1 * \w_ (2 * n) ^ (a * S (2 * e) + 2 * S e * n) *
+      \w_ (2 * n) ^ (2 * a)) with (-1 * (\w_ (2 * n) ^ (a * S (2 * e) + 2 * S e * n) *
+      \w_ (2 * n) ^ (2 * a))) by ring.
+    rewrite <- Cpow_add_r.
+    f_equal; f_equal.
+    lia.
+Qed.
 (*follows from the symmetry of unit roots*)
 Lemma nth_unit_root_pow_n: forall n,
   \w_(2*n) ^ (2*n) = 1.
@@ -784,6 +817,57 @@ Proof.
        apply even_and_odd.
 Qed.
 
+Lemma FFT_inductive_step_odd_pow_k: forall  k p j n,
+Nat.le 1 n -> 
+p [\w_(2*n)^((j*k)+ n)] = 
+\even_p [\w_n^(j*k)] - 
+(\w_(2*n) ^(j*k)) * (\odd_p)[\w_n^(j*k)].
+Proof.
+  unfold Nat.le. 
+  induction n.
+  (* case n = 0 *)
+   - intros. 
+     exfalso. 
+     lia.
+  (* induction starts at n = 1*)
+   - intros.
+       assert(forall n x p, x - n*p = x+(-n*p)).
+       (*assertion*)
+        {intros. apply c_proj_eq.
+        all: simpl.
+        all: lra. }
+       rewrite -> H0.
+       rewrite <- unit_root_symmetry.
+       assert(forall n j, nth_unit_root (2*n) ^(2*j+2*n) = 
+              nth_unit_root (2*n) ^ (j*2)).
+              intros. 
+              assert(nth_unit_root (2*n0) ^ (2*j0 + 2 * n0) =
+                     nth_unit_root (2*n0) ^ (2*j0 + n0 + n0)) by (f_equal; lia). 
+              rewrite -> H1.
+             repeat rewrite -> unit_root_symmetry.
+             apply c_proj_eq.
+             simpl. rewrite -> Ropp_involutive.
+             f_equal.
+             f_equal.
+             lia.
+             simpl. rewrite -> Ropp_involutive.
+             f_equal; f_equal.
+             lia. 
+       assert(nth_unit_root(S n) ^ (j*k) = (nth_unit_root(2* S n)^(j*k))^2) by
+          (rewrite -> unit_root_k_squares; reflexivity). 
+       rewrite -> H2.
+       Search(_^_).
+       rewrite <- Cpow_mult_r.
+       rewrite <- H1.
+       assert(nth_unit_root (2 * S n) ^ (2 * (j*k) + 2 * S n) = 
+              (nth_unit_root (2 * S n) ^ ((j*k)+S n)) ^ 2) by
+           (rewrite <- Cpow_mult_r; f_equal; lia).
+       rewrite -> H3.
+       symmetry.
+        
+       apply even_and_odd.
+Qed.
+
 Lemma length_one_eval: forall x p,
  length p = 1%nat -> p[x] = hd (RtoC 0) p.
 Proof.
@@ -852,9 +936,6 @@ intros. induction n.
       replace ((n-n)%nat) with O by lia.
       auto.   
 Qed.
-
-    
-(* Nat.le a n -> nth a (evals w n p) O = Pdense_eval p (w^a). *)
 Lemma make_left_correct: forall n a y_e y_o p,
 Nat.le 1 n -> Nat.lt a n -> length p = (2*n)%nat ->
 y_e = DFT (\even_p) ->
@@ -883,7 +964,38 @@ destruct n.
     auto.
     lia.
 Qed.
-
+Lemma make_left_correct_any_pow: forall k n a y_e y_o p,
+Nat.le 1 n -> Nat.lt a n -> length p = (2*n)%nat ->
+y_e = evals(\w_n^k)(n-1)%nat (\even_p) ->
+y_o = evals(\w_n^k)(n-1)%nat (\odd_p) ->
+(make_left y_e y_o (n-1) (\w_(2*n)^k))`_a  =
+evals(\w_(2*n)^k) (n-1)%nat(p)`_a.
+Proof.
+intros.
+destruct n.
+  - simpl. exfalso. lia.
+  - rewrite -> make_left_nth by lia.
+    rewrite -> H2, H3.
+    unfold DFT.
+    Search(length(_)).
+    replace(length(\even_p)) with (S n).
+    replace(length(\odd_p)) with (S n). 
+    repeat rewrite -> evals_correct by lia.
+    replace((\w_ (S n) ^ k) ^ a) with ((\w_ (S n) ^ (a*k))) by 
+    (rewrite <- Cpow_mult_r;
+    f_equal; lia).
+    replace((\w_ (2 * S n) ^ k) ^ a) with ((\w_ (2 * S n) ^ (a*k))) by 
+    (rewrite <- Cpow_mult_r;
+    f_equal; lia).
+    rewrite -> FFT_inductive_step_even by auto.
+    auto.
+    apply odd_half_len in H1.
+    auto.
+    lia.
+    apply even_half_len in H1.
+    auto.
+    lia.
+Qed.
 Fixpoint make_right (y_e y_o: list C) (n:nat)(w: C): list C :=
   match n with
   |O => y_e`_n - w^n * y_o`_n :: nil
@@ -967,6 +1079,42 @@ destruct n.
     rewrite -> FFT_inductive_step_odd.
     all:auto.
 Qed.
+Lemma make_right_correct_odd_pow: forall e k n a y_e y_o p,
+Nat.le 1 n -> Nat.lt a n -> length p = (2*n)%nat ->
+y_e = evals(\w_n^(k))(n-1)%nat(\even_p) ->
+y_o = evals(\w_n^(k))(n-1)%nat(\odd_p) ->  k = S(2*e) ->
+(make_right y_e y_o (n-1) (\w_(2*n)^(k)))`_a  =
+evals(\w_(2*n)^(k))(2*n-1)%nat p`_(a+n).
+Proof.
+intros.
+destruct n.
+  - simpl. exfalso. lia.
+  - rewrite -> make_right_nth by lia.
+    rewrite -> H2, H3.
+    unfold DFT.
+    replace(length(\even_p)) with (S n) by( rewrite -> even_half_len with (n:= S n);
+    repeat auto). 
+    replace(length(\odd_p)) with (S n) by( rewrite -> odd_half_len with (n:= S n);
+    repeat auto). 
+    repeat rewrite -> evals_correct by lia.
+    replace((\w_ (S n) ^ k) ^ a) with ((\w_ (S n) ^ (a*k))) by 
+    (rewrite <- Cpow_mult_r;
+    f_equal; lia).
+    replace((\w_ (2 * S n) ^ (k)) ^ (a+S n)) with ((\w_ (2 * S n) ^ (k*(a + S n)))) by 
+    (rewrite <- Cpow_mult_r;
+    f_equal; lia).
+    replace((\w_ (2 * S n) ^ (k)) ^ a) with (\w_(2*S n) ^ (a*k)) by
+    (rewrite <- Cpow_mult_r;
+        f_equal; lia).
+    replace(k * (a + S n))%nat with (a*k + k*(S n))%nat by lia.
+    rewrite <-  FFT_inductive_step_odd_pow_k by lia.
+    f_equal.
+    rewrite -> H4.
+    replace(a * S (2 * e) + S (2 * e) * S n)%nat with((a * S (2 * e) + (2 * e) * S n + S n))%nat by lia.
+    repeat rewrite -> unit_root_symmetry.
+    rewrite <- even_powered_n_symmetry.
+    auto.
+Qed.
 
 
 Definition butterfly (y_e y_o: list C)(w: C): list C :=
@@ -1020,6 +1168,39 @@ Proof.
 Qed.
 
 
+Lemma butterfly_nth_correct_odd_pows: forall e k n y_e y_o p a,
+Nat.le 1 n -> length p = (2*n)%nat -> Nat.lt a (2*n) ->
+y_e = evals(\w_n^(k))(n-1)%nat(\even_p) ->
+y_o =  evals(\w_n^(k))(n-1)%nat(\odd_p) -> k = S(2*e) ->
+butterfly y_e y_o (\w_(2*n)^k)`_a= 
+evals(\w_(2*n)^(k))(2*n-1)%nat p`_(a).
+Proof.
+ intros.
+    unfold butterfly.
+    assert(length y_e = n).
+    { apply even_half_len in H0.
+      rewrite -> H2.
+      rewrite -> evals_length_eq_n.
+      all: lia.
+     }
+    rewrite -> H5.
+    destruct(Nat.lt_ge_cases a n).
+    - rewrite -> app_nth1.
+      rewrite -> make_left_correct_any_pow with (p:= p) by auto.
+      repeat rewrite -> evals_correct by lia.
+      auto.
+      rewrite -> make_left_length.
+      lia.
+
+   -  rewrite -> app_nth2 by (rewrite -> make_left_length; lia).
+      rewrite -> make_left_length.
+      rewrite -> make_right_correct_odd_pow with (e:= e)(p:= p).
+      repeat rewrite -> evals_correct by lia.
+      repeat f_equal; lia.
+      all: auto.
+      lia.
+      
+Qed.
 Lemma nth_succ: forall (l1 l2: list C) a0 a r,
 (a :: l1)`_(S a0) = (r :: l2)`_(S a0) ->
 l1`_a0 = l2`_a0.
@@ -1113,6 +1294,47 @@ rewrite -> evals_length_eq_n.
 lia.
 Qed.
 
+Lemma butterfly_odd_pows_correct: forall e k n y_e y_o p,
+Nat.le 1 n -> length p = (2*n)%nat ->
+y_e = evals(\w_n^(k))(n-1)%nat(\even_p) ->
+y_o =  evals(\w_n^(k))(n-1)%nat(\odd_p) -> k = S(2*e) ->
+butterfly y_e y_o (\w_(2*n)^k)= 
+evals(\w_(2*n)^(k))(2*n-1)%nat p.
+Proof.
+intros.
+
+assert(forall a, Nat.lt a (2*n) -> 
+(butterfly y_e y_o (\w_(2*n)^k))`_a= 
+evals(\w_(2*n)^(k))(2*n-1)%nat p`_a).
+intros. apply butterfly_nth_correct_odd_pows with (e:= e). all: auto.
+assert(length (butterfly y_e y_o (\w_(2 * n)^k)) = (2*n)%nat).
+unfold butterfly.
+rewrite -> app_length.
+rewrite -> make_left_length.
+rewrite -> make_right_length.
+rewrite -> H1.
+rewrite -> evals_length_eq_n.
+apply even_half_len in H0.
+lia.
+lia.
+
+
+assert(forall a:nat,
+butterfly y_e y_o (\w_(2*n)^k) `_ a= 
+evals(\w_(2*n)^(k))(2*n-1)%nat p`_a).
+apply lt_to_all_nth.
+rewrite -> H5.
+rewrite -> evals_length_eq_n.
+lia.
+rewrite -> H5.
+apply H4.
+
+apply nth_eq in H6.
+auto.
+rewrite -> H5.
+rewrite -> evals_length_eq_n.
+lia.
+Qed.
 
 
 Lemma pow_le_1: forall n,
@@ -1180,6 +1402,47 @@ induction n.
     apply pow_le_1.
 
 Qed.
+
+Lemma fft_correct_odd_pows: forall n p k e,
+length p = (2^n)%nat -> k = S(2*e) ->
+fft n p (nth_unit_root(2^n%nat)^k) = evals(\w_(2^n)^(k))(2^n-1)%nat p.
+Proof.
+induction n.
+  - intros.
+    simpl in *.
+    rewrite -> length_one_eval by auto.
+    destruct p.
+    + simpl in H; exfalso; lia.
+    + simpl in *.
+      assert(length p = O) by lia.
+      apply length_zero_iff_nil in H1.
+      rewrite -> H1; auto.
+  - intros.
+    simpl.
+(* even poly degree *)
+    assert(length (\even_p) = (2^n)%nat).
+      apply even_half_len in H.
+      apply H.
+      apply pow_le_1.
+(* odd poly degree *)
+    assert(length (\odd_p) = (2^n)%nat).
+      apply odd_half_len.
+      apply pow_le_1.
+      apply H.
+    replace(2 ^ n + (2 ^ n + 0))%nat with (2*(2^n))%nat by lia.
+    replace(\w_ (2*(2^n)) ^ k *
+           (\w_ (2*(2^n)) ^ k * 1)) with ((\w_ (2*(2^n))^k)^2) by ring.
+    rewrite -> unit_root_k_squares.
+    repeat rewrite -> IHn with (e:= e) by auto.
+    rewrite -> butterfly_odd_pows_correct with (e:=e)(p:= p).
+    f_equal.
+    all:try auto.
+    (* Nat.le 2^n*)
+    apply pow_le_1.
+Qed.
+
+
+
 Print nth.
 Definition sum_eval'(x:C)(p:dense_cpoly) :=
 sum_n(fun c => p`_c*x^c)(length p).
@@ -1408,8 +1671,9 @@ j <> j0 ->
 sum_n (fun i : nat =>(\w_ (n) ^ i) ^ j0 * ((/ \w_ (n)) ^ j) ^ i)(n-1)
 = RtoC 0.
 Proof.
-
 Admitted.
+
+Search(/_).
     
    
 Definition delta(n m : nat) : C :=
@@ -1795,20 +2059,92 @@ apply full_fun_correct.
 all: auto.
 Qed.
 
+
 Definition ifft(n:nat)(p:list C):list C :=
-  let w:= (1/n) * 1/(\w_(2^n)) in 
-  fft n p w.
+  let w:= /(\w_(2^n)) in 
+  map(fun x => /(2^n)%nat * x) (fft n p w).
+
+Lemma ifft_iDFT: forall p n,
+length p = (2^n)%nat ->
+ifft n p = iDFT p.
+Proof.
+  intros.
+  unfold ifft, iDFT.
+  destruct n.
+  - rewrite -> H.
+    simpl in *.
+    destruct p.
+    + simpl in H.
+      exfalso; lia.
+    + simpl in *.
+      assert ((length p) = O) by lia.
+      apply length_zero_iff_nil in H0.
+      rewrite -> H0.
+      simpl.
+      rewrite -> complex_add.
+      f_equal.
+      unfold complex_eval.
+      simpl.
+      ring.
+  - rewrite -> H.
+    replace(/ \w_ (2 ^ (S n))) with (\w_(2^(S n))^(2^(S n)-1)%nat).
+    Search(fft).
+    rewrite -> fft_correct_odd_pows with (e:= ((2^(S n)-2)/2)%nat).
+    f_equal.
+    auto.
+    rewrite <- Nat.div2_div.
+    rewrite <- Nat.double_twice.
+    rewrite <- Nat.Even_double.
+    assert(forall n0, Nat.le 2 (2^ S n0)) as H1.
+    { induction n0.
+       - simpl. auto.
+       - apply Nat.le_trans with (2 ^ S n0)%nat.
+         apply IHn0.
+         simpl.
+         lia.
+    }
+    rewrite <-  Nat.sub_succ_l by apply H1.
+    lia.
+    apply Nat.even_spec.
+    rewrite -> Nat.even_sub.
+    replace (Nat.even (2 ^ S n)) with true by
+      (simpl;
+      replace(2 ^ n + (2 ^ n + 0))%nat with (2*(2^n))%nat by lia;
+      rewrite -> Nat.even_mul; auto).
+    auto.
+    (* (2 <= 2 ^ S n)%nat *)
+    { destruct n.
+      - simpl. auto.
+      - simpl. assert(Nat.le 1 (2^n)) by apply pow_le_1. lia.
+    }
+    apply inverse_unit_root.
+Qed.
     
 Lemma icorrect : forall n p x,
 length p = (2^n)%nat -> 
 (ifft n (fft n p (\w_(2^n))))[x] = p[x].
 Proof.
-
-  induction n.
-  - simpl. reflexivity.
-  - intros. simpl.
-     Admitted.
-
+  intros.
+  assert(Nat.le 1 (length p)) as H1 by
+    (rewrite -> H; apply pow_le_1).
+  rewrite -> ifft_iDFT.
+  rewrite -> fft_correct by auto.
+  rewrite -> iDFT_correct.
+  auto.
+  (*p <> nil *)
+  { 
+    assert(length p <> O) by lia.
+    intros Hf.
+    apply length_zero_iff_nil in Hf.
+    auto. }
+  (* length of fft*)
+  rewrite -> fft_correct by auto.
+  unfold DFT.
+  rewrite -> evals_length_eq_n.
+  rewrite -> H.
+  ring_simplify.
+  lia.
+Qed.
 
 Fixpoint add_dense_poly (p1 p2: dense_cpoly): dense_cpoly :=
   match p1, p2 with
