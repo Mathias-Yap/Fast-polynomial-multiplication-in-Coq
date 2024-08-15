@@ -392,14 +392,53 @@ Qed.
 Definition nth_unit_root(n:nat): C :=
   cos((2*PI)/n) + Ci * sin ((2*PI)/n).
 
-Lemma unit_root_k_squares: forall n k,
-((nth_unit_root (2*n))^k)^2 = (nth_unit_root n)^k.
+Lemma unit_root_incr: forall x y : R,
+(cos(x)+Ci*(sin x))*((cos y) + Ci * sin y) =
+cos(x+y) + Ci * (sin (x+y)).
 Proof.
-Admitted.
+  intros.
+  rewrite -> cos_plus.
+  rewrite -> sin_plus.
+  apply c_proj_eq.
+  simpl.
+  ring_simplify. auto.
+  simpl; ring_simplify.
+  auto.
+Qed.
+
+Lemma unit_root_k_squares: forall n k,
+n<> O -> ((nth_unit_root (2*n))^k)^2 = (nth_unit_root n)^k.
+Proof.
+ intros.
+ unfold nth_unit_root.
+ replace(2 * PI / n)%R with ((2 * PI / (2 * n)%nat)+(2 * PI / (2 * n)%nat))%R.
+ rewrite <- unit_root_incr.
+ replace(((cos (2 * PI / (2 * n)%nat) + Ci * sin (2 * PI / (2 * n)%nat)) *
+ (cos (2 * PI / (2 * n)%nat) + Ci * sin (2 * PI / (2 * n)%nat)))) 
+  with((cos (2 * PI / (2 * n)%nat) + Ci * sin (2 * PI / (2 * n)%nat))^2) by ring.
+ repeat rewrite <- Cpow_mult_r.
+ f_equal.
+ ring.
+ symmetry.
+ Search(_/(_*_)%nat)%nat.
+ rewrite <- Rdiv_Rmult_simplify with (z:=2%nat).
+ ring_simplify.
+ rewrite -> mult_INR.
+ ring_simplify.
+ replace(INR 2%nat) with 2%R by (simpl; auto).
+ field.
+ apply not_0_INR; auto.
+ simpl.
+ lra.
+ apply not_0_INR; auto.
+Qed.
 
 Lemma unit_root_symmetry: forall n k,
 nth_unit_root (2*n)^(k+n) = - (nth_unit_root (2*n))^k.
 Proof.
+ intros.
+ unfold nth_unit_root.
+ 
 Admitted.  
 
 
@@ -411,12 +450,15 @@ Admitted.
 
 
 
+
 Notation "\w_ n " := (nth_unit_root n) (at level 10, no associativity).
 
 Lemma inverse_unit_root: forall n,
 \w_ (2 ^ n) ^ (2 ^ n - 1) = / \w_ (2 ^ n).
 Proof.
 Admitted.
+
+
 
 Lemma even_powered_n_symmetry: forall n a e,
 - \w_ (2*n) ^ (a * S (2 * e)) =
@@ -468,13 +510,14 @@ lia.
 Qed.
 
 Lemma unit_root_squares: forall n,
-\w_(2*n)^2 = \w_n.
+n<> O -> \w_(2*n)^2 = \w_n.
 Proof.
 intros.
 replace (nth_unit_root (2 * n)) with (nth_unit_root (2 * n)^1).
 replace (nth_unit_root n) with (nth_unit_root n ^1).
 apply unit_root_k_squares.
-eapply c_proj_eq.
+auto.
+apply c_proj_eq.
 f_equal. ring.
 f_equal; ring.
 ring.
@@ -761,7 +804,8 @@ Proof.
   (* case n >= 1*)
   - intros. 
     assert(nth_unit_root(S n) ^ j = (nth_unit_root(2* S n)^j)^2). 
-       rewrite -> unit_root_k_squares. reflexivity. 
+       rewrite -> unit_root_k_squares. reflexivity.
+    lia. 
     rewrite -> H0.
     symmetry. 
     apply even_and_odd. 
@@ -804,7 +848,7 @@ Proof.
              f_equal; f_equal.
              lia. 
        assert(nth_unit_root(S n) ^ j = (nth_unit_root(2* S n)^j)^2) by
-          (rewrite -> unit_root_k_squares; reflexivity). 
+          (rewrite -> unit_root_k_squares; auto). 
        rewrite -> H2.
        Search(_^_).
        rewrite <- Cpow_mult_r.
@@ -854,7 +898,7 @@ Proof.
              f_equal; f_equal.
              lia. 
        assert(nth_unit_root(S n) ^ (j*k) = (nth_unit_root(2* S n)^(j*k))^2) by
-          (rewrite -> unit_root_k_squares; reflexivity). 
+          (rewrite -> unit_root_k_squares; auto). 
        rewrite -> H2.
        Search(_^_).
        rewrite <- Cpow_mult_r.
@@ -1392,6 +1436,7 @@ induction n.
     assert(nth_unit_root (2 ^ n + (2 ^ n + 0)) *
       (nth_unit_root (2 ^ n + (2 ^ n + 0)) * 1%R)= nth_unit_root (2 ^ n)).
     apply unit_root_squares.
+    assert(Nat.le 1 (2 ^ n)) by apply pow_le_1; lia.
     rewrite -> H2.
     repeat rewrite -> IHn by auto.
     replace(\w_ (2 ^ n + (2 ^ n + 0))) with (\w_(2*(2^n))).
@@ -1439,6 +1484,8 @@ induction n.
     all:try auto.
     (* Nat.le 2^n*)
     apply pow_le_1.
+    assert(Nat.le 1 (2 ^ n)) by apply pow_le_1.
+    lia.
 Qed.
 
 
@@ -2673,55 +2720,6 @@ Qed.
 Check(RtoC 0).
 Print C.
 
-(*
-Lemma cast_from_reals: forall x p1 p2,
-  RtoC(Pdense_eval p1 x * Pdense_eval p2 x) =
-  (pmul (poly_RtoC p1) (poly_RtoC p2))[RtoC x].
-Proof.
-intros.
-rewrite <- pmul_correct.
-repeat rewrite <- poly_RtoC_correct.
-apply c_proj_eq.
-all:simpl.
-all:lra.
-Qed.
-
-Lemma poly_RtoC_length: forall p,
-length(poly_RtoC p) = length p.
-Proof.
-induction p.
-simpl. auto.
-simpl. auto.
-Qed.
-
-Lemma extended: forall n x p1 p2,
-length p1 = (2^n)%nat -> length p1 = length p2
-->
-RtoC(Pdense_eval p1 x * Pdense_eval p2 x) =
-(fast_pmul(poly_RtoC p1)(poly_RtoC p2)(n))[RtoC x].
-Proof.
-intros.
-rewrite -> fast_pmul_correct.
-apply cast_from_reals.
-rewrite -> poly_RtoC_length; auto.
-repeat rewrite -> poly_RtoC_length; auto.
-Qed.
-Search(poly_RtoC).
-
-
-Definition poly_CtoR(p:dense_cpoly): dense_poly :=
- map(Cmod) p.
-Lemma lol: forall x p1 p2,
-Pdense_eval(poly_CtoR(pmul(poly_RtoC p1)(poly_RtoC p2))) x =
-(Pdense_eval p1 x * Pdense_eval p2 x)%R.
-Proof.
-intros.
-pose proof cast_from_reals.
-
-Lemma dense_fast_mul_real_result: forall p1 p2 n x,
-  length p1 = (2^n)%nat -> length p1 = length p2 ->
-  (fast_pmul p1 p2 n)[x] =
-  (pmul p1 p2)   	[x]. *)
 
 
 
