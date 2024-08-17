@@ -1801,14 +1801,45 @@ destruct (2^n)%nat eqn:E .
     apply transform_roots.
 Qed.
 
-    
-Lemma inner_sum_zero: forall j j0 n,
-Nat.lt j n -> Nat.lt j0 n ->
-j <> j0 ->
-sum_n (fun i : nat =>(\w_ (n) ^ i) ^ j0 * ((/ \w_ (n)) ^ j) ^ i)(n-1)
-= RtoC 0.
+Lemma unit_roots_sum_to_zero: forall n k,
+sum_n (fun i : nat => \w_ (2 ^ n) ^ (k * i)) (2 ^ n - 1) = RtoC 0.
 Proof.
 Admitted.
+    
+Lemma inner_sum_zero: forall j j0 n,
+Nat.lt j (2^n) -> Nat.lt j0 (2^n) ->
+j <> j0 ->
+sum_n (fun i : nat =>(\w_ (2^n) ^ i) ^ j0 * ((/ \w_ (2^n)) ^ j) ^ i)(2^n-1)
+= RtoC 0.
+Proof.
+intros.
+  rewrite -> sum_n_ext with (b:= fun i => \w_ (2 ^ n) ^ (i* j0)*  (/ ((\w_ (2 ^ n))) ^ (i*j))).
+  rewrite -> sum_n_ext with (b:= fun i => \w_(2^n)^(i*j0) * (\w_(2^n)^(2^n-1))^(i*j)).
+  rewrite -> sum_n_ext with (b:= fun i => \w_(2^n)^(i*j0) * \w_(2^n)^((2^n-1)*j*i)) .
+  rewrite -> sum_n_ext with (b:= fun i => \w_(2^n)^((i*j0)+(2^n-1)*j*i)) by (intros;
+    rewrite -> Cpow_add_r;
+    auto). 
+  rewrite -> sum_n_ext with (b:= fun i => \w_(2^n)^((j0+(2^n-1)*j)*i)) by (intros;
+    f_equal;
+    lia).
+  rewrite -> unit_roots_sum_to_zero.
+  auto.
+  { intros.
+    rewrite <- Cpow_mult_r.
+    f_equal. f_equal.
+    lia.  }
+  { intros.
+    f_equal.
+    rewrite -> inverse_unit_root.
+    rewrite -> Cpow_inv by apply unit_root_nonzero.
+    auto. }
+  { intros.
+    repeat rewrite <- Cpow_mult_r.
+    f_equal.
+    rewrite -> Cpow_inv by apply unit_root_nonzero.
+    f_equal. f_equal.
+    lia. }
+Qed.
 
 Definition delta(n m : nat) : C :=
 if Nat.eqb n m then 1 else 0.
