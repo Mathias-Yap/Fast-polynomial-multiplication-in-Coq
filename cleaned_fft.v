@@ -1885,7 +1885,7 @@ destruct (Nat.eq_dec j j0).
    ring_simplify.
    rewrite -> RtoC_pow.
    auto. }
-  apply inner_sum_zero with (n:= (2^n)%nat) in n0 as H2.
+  apply inner_sum_zero with (n:= (n)%nat) in n0 as H2.
   rewrite -> H2.
   apply Nat.eqb_neq in n0.
   unfold delta.
