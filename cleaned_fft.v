@@ -797,14 +797,14 @@ Proof.
 Qed.
 
 (* evaluation on a power list *)
-Fixpoint evals (w:C)(n:nat)(p:dense_poly): dense_poly :=
+Fixpoint eval_powers (w:C)(n:nat)(p:dense_poly): dense_poly :=
   match n with
   | O => nil
-  | S(n') => evals w n' p ++ p[w^n'] :: nil
+  | S(n') => eval_powers w n' p ++ p[w^n'] :: nil
   end.
 
-Lemma cevals_succ: forall n w p,
-evals w (S n) p = evals w n p ++ p[w^(n)]::nil.
+Lemma ceval_powers_succ: forall n w p,
+eval_powers w (S n) p = eval_powers w n p ++ p[w^(n)]::nil.
 Proof.
 intros.
   simpl.
@@ -812,8 +812,8 @@ intros.
 auto. 
 Qed.
 
-Lemma evals_nil: forall n w,
-evals w (S n) nil = RtoC(0)::repeat (RtoC 0) n.
+Lemma eval_powers_nil: forall n w,
+eval_powers w (S n) nil = RtoC(0)::repeat (RtoC 0) n.
 Proof.
 intros.
 simpl.
@@ -829,8 +829,8 @@ induction n.
 Qed.
 
 
-Lemma evals_length_eq_n: forall w n p,
-length(evals w n p) = n.
+Lemma eval_powers_length_eq_n: forall w n p,
+length(eval_powers w n p) = n.
 Proof.
 induction n.
   - auto.
@@ -841,9 +841,9 @@ induction n.
 Qed.
 
 Notation "p `_ j" := (nth j p 0)(at level 10). 
-Lemma evals_step: forall n j w a p,
+Lemma eval_powers_step: forall n j w a p,
 Nat.lt j n ->
-(evals w n (a::p))`_j = a + w^j * p[w^ j].
+(eval_powers w n (a::p))`_j = a + w^j * p[w^ j].
 Proof.
 intros.
 induction n.
@@ -852,13 +852,13 @@ induction n.
     destruct H.
     + simpl. rewrite -> app_nth1. 
       apply IHn; lia.
-      rewrite -> evals_length_eq_n.
+      rewrite -> eval_powers_length_eq_n.
       lia.
     + simpl.
-      assert(length(evals w n (a::p)) = j)
-      by (rewrite -> evals_length_eq_n; lia).
-      replace(nth j (evals w n (a :: p) ++ (a :: p) [w ^ n] :: nil) 0%R) with
-      (nth(length(evals w n (a::p))) (evals w n (a::p) ++ (a::p)[w^n]::nil)0).
+      assert(length(eval_powers w n (a::p)) = j)
+      by (rewrite -> eval_powers_length_eq_n; lia).
+      replace(nth j (eval_powers w n (a :: p) ++ (a :: p) [w ^ n] :: nil) 0%R) with
+      (nth(length(eval_powers w n (a::p))) (eval_powers w n (a::p) ++ (a::p)[w^n]::nil)0).
       rewrite -> nth_middle.
       rewrite -> complex_add.
       replace j with n by lia.
@@ -867,8 +867,8 @@ induction n.
      rewrite -> H0; auto.
 Qed.
 
-Lemma evals_correct: forall x n a p,
-Nat.lt a n -> (evals x n p)`_a = p[x^a].
+Lemma eval_powers_correct: forall x n a p,
+Nat.lt a n -> (eval_powers x n p)`_a = p[x^a].
 Proof.
 induction n.
   - intros; simpl.
@@ -879,22 +879,22 @@ induction n.
     + 
       rewrite -> app_nth1.
       apply IHn; lia.
-      rewrite -> evals_length_eq_n; lia.
+      rewrite -> eval_powers_length_eq_n; lia.
     +
       assert(n=a) by lia.
       rewrite -> H1.
       rewrite -> app_nth2.
-      rewrite -> evals_length_eq_n.
+      rewrite -> eval_powers_length_eq_n.
       replace(a-a)%nat with O by lia.
       simpl.
       auto.
-      rewrite -> evals_length_eq_n; auto.
+      rewrite -> eval_powers_length_eq_n; auto.
 Qed.
 
 
 Definition DFT(p: dense_poly): list C:=
 let n := length p in
-evals(\w_n) (n) p.
+eval_powers(\w_n) (n) p.
 
 Lemma FFT_inductive_step_even: forall p j n,
 Nat.le 1 n ->
@@ -1045,7 +1045,7 @@ destruct n.
     Search(length(_)).
     replace(length(\even_p)) with (S n).
     replace(length(\odd_p)) with (S n). 
-    repeat rewrite -> evals_correct by lia.
+    repeat rewrite -> eval_powers_correct by lia.
     Search(nth_unit_root).
     rewrite -> H1.
     rewrite -> FFT_inductive_step_even by auto. 
@@ -1059,10 +1059,10 @@ destruct n.
 Qed.
 Lemma make_left_correct_any_pow: forall k n a y_e y_o p,
 Nat.le 1 n -> Nat.lt a (n) -> length p = (2*n)%nat ->
-y_e = evals(\w_n^k)(n)%nat (\even_p) ->
-y_o = evals(\w_n^k)(n)%nat (\odd_p) ->
+y_e = eval_powers(\w_n^k)(n)%nat (\even_p) ->
+y_o = eval_powers(\w_n^k)(n)%nat (\odd_p) ->
 (make_left y_e y_o (n) (\w_(2*n)^k))`_a  =
-evals(\w_(2*n)^k) (n)%nat(p)`_a.
+eval_powers(\w_(2*n)^k) (n)%nat(p)`_a.
 Proof.
 intros.
 destruct n.
@@ -1073,7 +1073,7 @@ destruct n.
     Search(length(_)).
     replace(length(\even_p)) with (S n).
     replace(length(\odd_p)) with (S n). 
-    repeat rewrite -> evals_correct by lia.
+    repeat rewrite -> eval_powers_correct by lia.
     replace((\w_ (S n) ^ k) ^ a) with ((\w_ (S n) ^ (a*k))) by 
     (rewrite <- Cpow_mult_r;
     f_equal; lia).
@@ -1151,9 +1151,9 @@ intros.
     unfold DFT.
     replace(length(\even_p)) with (2^n)%nat.
     replace(length(\odd_p)) with (2^n)%nat.   
-    repeat rewrite -> evals_correct by lia.
+    repeat rewrite -> eval_powers_correct by lia.
     rewrite -> H0.
-    rewrite -> evals_correct.
+    rewrite -> eval_powers_correct.
     rewrite -> FFT_inductive_step_odd.
     all:auto.
     { destruct(Nat.lt_ge_cases(2^n)(a)).
@@ -1171,18 +1171,18 @@ intros.
 Qed.
 Lemma make_right_correct_odd_pow: forall e k n a y_e y_o p,
 Nat.lt a (2^n) -> length p = (2^S n)%nat ->
-y_e = evals(\w_(2^n)^(k))((2^n))%nat(\even_p) ->
-y_o = evals(\w_(2^n)^(k))((2^n))%nat(\odd_p) ->  k = S(2*e) ->
+y_e = eval_powers(\w_(2^n)^(k))((2^n))%nat(\even_p) ->
+y_o = eval_powers(\w_(2^n)^(k))((2^n))%nat(\odd_p) ->  k = S(2*e) ->
 (make_right y_e y_o ((2^n)) (\w_(2^S n)^(k)))`_a  =
-evals(\w_(2^S n)^(k))(2^S n)%nat p`_(a+(2^n)).
+eval_powers(\w_(2^S n)^(k))(2^S n)%nat p`_(a+(2^n)).
 Proof.
 intros.
     rewrite -> make_right_nth.
     rewrite -> H1, H2.
     replace(length(\even_p)) with (2^ n)%nat.
     replace(length(\odd_p)) with (2^ n)%nat.   
-    repeat rewrite -> evals_correct by lia.
-    rewrite -> evals_correct.
+    repeat rewrite -> eval_powers_correct by lia.
+    rewrite -> eval_powers_correct.
     replace((\w_ (2^S n) ^ k) ^ a) with ((\w_ (2^S n) ^ (a*k))) by 
     (rewrite <- Cpow_mult_r;
     f_equal; lia).
@@ -1241,7 +1241,7 @@ Proof.
     assert(length y_e = (2^n)%nat).
     { simpl in H. apply even_half_len in H.
       rewrite -> H1.
-      rewrite -> evals_length_eq_n.
+      rewrite -> eval_powers_length_eq_n.
       rewrite -> H.
       pose proof pow_le_1.
       specialize H3 with (n:= n).
@@ -1260,7 +1260,7 @@ Proof.
       rewrite -> make_left_length.
       rewrite -> make_right_correct with (p:= p).
       unfold DFT.
-      repeat rewrite -> evals_correct by lia.
+      repeat rewrite -> eval_powers_correct by lia.
       f_equal.
       rewrite -> H.
       replace(a-(2 ^ n) + 2 ^ n)%nat with (a)%nat by lia.
@@ -1277,17 +1277,17 @@ Qed.
 
 Lemma butterfly_nth_correct_odd_pows: forall e k n y_e y_o p a,
 length p = (2^S n)%nat -> Nat.lt a (2^S n) ->
-y_e = evals(\w_(2^n)^(k))(2^n)%nat(\even_p) ->
-y_o =  evals(\w_(2^n)^(k))(2^n)%nat(\odd_p) -> k = S(2*e) ->
+y_e = eval_powers(\w_(2^n)^(k))(2^n)%nat(\even_p) ->
+y_o =  eval_powers(\w_(2^n)^(k))(2^n)%nat(\odd_p) -> k = S(2*e) ->
 butterfly y_e y_o (\w_(2^S n)^k)`_a= 
-evals(\w_(2^S n)^(k))(2^S n)%nat p`_(a).
+eval_powers(\w_(2^S n)^(k))(2^S n)%nat p`_(a).
 Proof.
  intros.
     unfold butterfly.
     assert(length y_e = (2^n)%nat).
     { simpl in H0. apply even_half_len in H.
       rewrite -> H1.
-      rewrite -> evals_length_eq_n.
+      rewrite -> eval_powers_length_eq_n.
       pose proof pow_le_1.
       specialize H4 with (n:= n).
       lia.
@@ -1297,7 +1297,7 @@ Proof.
     destruct(Nat.lt_ge_cases a (2^n)).
     - rewrite -> app_nth1.
       rewrite -> make_left_correct_any_pow with (p:= p). 
-      repeat rewrite -> evals_correct by lia.
+      repeat rewrite -> eval_powers_correct by lia.
       simpl in *.
       all:try lia.
       all: auto.
@@ -1306,7 +1306,7 @@ Proof.
    -  rewrite -> app_nth2. 
       all: rewrite -> make_left_length.
       rewrite -> make_right_correct_odd_pow with (e:= e)(p:= p).
-      repeat rewrite -> evals_correct by lia.
+      repeat rewrite -> eval_powers_correct by lia.
       f_equal. f_equal. 
       all: auto.
       pose proof pow_le_1; specialize H6 with (n:=n).
@@ -1393,7 +1393,7 @@ rewrite -> make_left_length.
 rewrite -> make_right_length.
 rewrite -> H0.
 unfold DFT.
-rewrite -> evals_length_eq_n.
+rewrite -> eval_powers_length_eq_n.
 simpl in H; apply even_half_len in H.
 rewrite -> H.
 pose proof pow_le_1; specialize H3 with (n:=n).
@@ -1407,7 +1407,7 @@ DFT p `_ a).
 apply lt_to_all_nth.
 rewrite -> H3.
 unfold DFT.
-rewrite -> evals_length_eq_n.
+rewrite -> eval_powers_length_eq_n.
 rewrite -> H. 
 pose proof pow_le_1; specialize H4 with (n:=n).
 simpl; lia.
@@ -1418,22 +1418,22 @@ apply nth_eq in H4.
 auto.
 rewrite -> H3.
 unfold DFT.
-rewrite -> evals_length_eq_n.
+rewrite -> eval_powers_length_eq_n.
 pose proof pow_le_1; specialize H5 with (n:=S n).
 rewrite -> H. lia.
 Qed.
 
 Lemma butterfly_odd_pows_correct: forall e k n y_e y_o p,
 length p = (2^S n)%nat ->
-y_e = evals(\w_(2^n)^(k))(2^n)%nat(\even_p) ->
-y_o =  evals(\w_(2^n)^(k))(2^n)%nat(\odd_p) -> k = S(2*e) ->
+y_e = eval_powers(\w_(2^n)^(k))(2^n)%nat(\even_p) ->
+y_o =  eval_powers(\w_(2^n)^(k))(2^n)%nat(\odd_p) -> k = S(2*e) ->
 butterfly y_e y_o (\w_(2^S n)^k)= 
-evals(\w_(2^S n)^(k))(2^S n)%nat p.
+eval_powers(\w_(2^S n)^(k))(2^S n)%nat p.
 Proof.
 intros.
 assert(forall a, Nat.lt a (2^S n) -> 
 (butterfly y_e y_o (\w_(2^S n)^k))`_a= 
-evals(\w_(2^S n)^(k))(2^S n)%nat p`_a).
+eval_powers(\w_(2^S n)^(k))(2^S n)%nat p`_a).
 intros. apply butterfly_nth_correct_odd_pows with (e:= e). all: auto.
 assert(length (butterfly y_e y_o (\w_(2 ^ S n)^k)) = (2^S n)%nat).
 unfold butterfly.
@@ -1441,7 +1441,7 @@ rewrite -> app_length.
 rewrite -> make_left_length.
 rewrite -> make_right_length.
 rewrite -> H0.
-rewrite -> evals_length_eq_n.
+rewrite -> eval_powers_length_eq_n.
 simpl.
 pose proof pow_le_1. specialize H4 with (n:= n).
 lia.
@@ -1449,10 +1449,10 @@ lia.
 
 assert(forall a:nat,
 butterfly y_e y_o (\w_(2^S n)^k) `_ a= 
-evals(\w_(2^S n)^(k))(2^S n)%nat p`_a).
+eval_powers(\w_(2^S n)^(k))(2^S n)%nat p`_a).
 apply lt_to_all_nth.
 rewrite -> H4.
-rewrite -> evals_length_eq_n.
+rewrite -> eval_powers_length_eq_n.
 pose proof pow_le_1. specialize H5 with (n:= S n).
 lia.
 
@@ -1462,7 +1462,7 @@ apply H3.
 apply nth_eq in H5.
 auto.
 rewrite -> H4.
-rewrite -> evals_length_eq_n.
+rewrite -> eval_powers_length_eq_n.
 pose proof pow_le_1. specialize H6 with (n:= S n).
 lia.
 Qed.
@@ -1523,7 +1523,7 @@ Qed.
 
 Lemma fft_correct_odd_pows: forall n p k e,
 length p = (2^n)%nat -> k = S(2*e) ->
-fft n p (nth_unit_root(2^n%nat)^k) = evals(\w_(2^n)^(k))(2^n)%nat p.
+fft n p (nth_unit_root(2^n%nat)^k) = eval_powers(\w_(2^n)^(k))(2^n)%nat p.
 Proof.
 induction n.
   - intros.
@@ -1669,7 +1669,7 @@ DFT p`_a = p[\w_(length p)^a].
 Proof.
 intros.
 unfold DFT.
-rewrite -> evals_correct by lia.
+rewrite -> eval_powers_correct by lia.
 auto.
 Qed.
 
@@ -1793,7 +1793,7 @@ destruct (2^n)%nat eqn:E .
 Qed.
 
 Axiom unit_roots_sum_to_zero: forall n k,
-sum_n (fun i : nat => \w_ (2 ^ n) ^ (k * i)) (2 ^ n - 1) = RtoC 0.
+Nat.le 1 n -> sum_n (fun i : nat => \w_ (2 ^ n) ^ (k * i)) (2 ^ n - 1) = RtoC 0.
 
     
 Lemma inner_sum_zero: forall j j0 n,
@@ -1812,8 +1812,13 @@ intros.
   rewrite -> sum_n_ext with (b:= fun i => \w_(2^n)^((j0+(2^n-1)*j)*i)) by (intros;
     f_equal;
     lia).
+  destruct(Nat.lt_ge_cases n 1).
+  replace n with O in * by lia.
+  simpl in *.
+  exfalso; lia.
   rewrite -> unit_roots_sum_to_zero.
-  auto.
+  auto. lia.
+  
   { intros.
     rewrite <- Cpow_mult_r.
     f_equal. f_equal.
@@ -2029,13 +2034,13 @@ destruct j.
       reflexivity. }
 Qed.
   
-Lemma evals_inversed: forall j n p,
+Lemma eval_powers_inversed: forall j n p,
 (2^n)%nat = length p ->Nat.lt j (2^n)%nat ->
-nth j (evals (/nth_unit_root (2^n)%nat) (2^n)%nat (DFT p)) 0=
+nth j (eval_powers (/nth_unit_root (2^n)%nat) (2^n)%nat (DFT p)) 0=
 2^n * nth j p 0.
 Proof.
 intros.
-rewrite -> evals_correct by lia.
+rewrite -> eval_powers_correct by lia.
 rewrite <- sum_ev_eq.
 unfold sum_eval.
 unfold DFT.
@@ -2046,7 +2051,7 @@ rewrite -> sum_n_ext with (b:=  fun c : nat =>
                               sum_eval(\w_(2^n)^c) p * ((/ \w_ (2^n)) ^ j) ^ c).
 unfold sum_eval.
 rewrite <- H.
-rewrite -> evals_length_eq_n.
+rewrite -> eval_powers_length_eq_n.
 replace(S (2^n-1)-1)%nat with (2^n-1)%nat by lia.
 rewrite -> sum_n_ext with (b:=(fun c : nat => 
                          sum_n (fun c0 : nat => nth c0 p 0 * ((\w_ (2^n) ^ c) ^ c0 *
@@ -2081,8 +2086,8 @@ f_equal.
   rewrite -> sum_ev_eq.
   auto. }
 { intros.
-  rewrite -> evals_length_eq_n in H1.
-  rewrite -> evals_correct by lia.
+  rewrite -> eval_powers_length_eq_n in H1.
+  rewrite -> eval_powers_correct by lia.
   auto.
 }
 Qed.
@@ -2136,30 +2141,30 @@ induction j.
      auto.
 Qed.
      
-Lemma evals_map_inversed: forall n p,
+Lemma eval_powers_map_inversed: forall n p,
 (2^n)%nat = length p ->
-evals (/nth_unit_root (2^n)%nat) (2^n)%nat (DFT p) = map(fun x => 2^n * x)p.
+eval_powers (/nth_unit_root (2^n)%nat) (2^n)%nat (DFT p) = map(fun x => 2^n * x)p.
 Proof.
 intros.
-  pose proof evals_inversed.
-  assert(forall j, nth j (evals (/ \w_ (2^n)) (2^n) (DFT p)) 0 =
+  pose proof eval_powers_inversed.
+  assert(forall j, nth j (eval_powers (/ \w_ (2^n)) (2^n) (DFT p)) 0 =
     nth j (map (fun x : C => 2^n * x) p) 0).
   { intros.
     destruct (Nat.lt_ge_cases j (2^n)).
-    - rewrite -> evals_inversed.
+    - rewrite -> eval_powers_inversed.
       apply nth_mul.
       auto.
       lia.
     - repeat rewrite -> nth_overflow. 
       auto. 
       rewrite -> map_length. lia. 
-      rewrite -> evals_length_eq_n.
+      rewrite -> eval_powers_length_eq_n.
       pose proof pow_le_1.
       specialize H2 with (n:= (n)%nat). 
       lia. } 
   apply nth_eq in H1.
   auto.
-  rewrite -> evals_length_eq_n; rewrite -> map_length.
+  rewrite -> eval_powers_length_eq_n; rewrite -> map_length.
   pose proof pow_le_1.
   specialize H2 with (n:= n). 
   lia.
@@ -2167,10 +2172,10 @@ Qed.
 
 Lemma full_fun_correct: forall n p,
 (2^n)%nat = length p ->
-map(fun x => /(2^n)%nat * x)(evals (/nth_unit_root (2^n)%nat) (2^n)%nat (DFT p)) = p.
+map(fun x => /(2^n)%nat * x)(eval_powers (/nth_unit_root (2^n)%nat) (2^n)%nat (DFT p)) = p.
 Proof.
 intros.
-  replace (evals (/nth_unit_root (2^n)%nat) (2^n)%nat (DFT p)) with (map(fun x => (2^n)%nat * x)p).
+  replace (eval_powers (/nth_unit_root (2^n)%nat) (2^n)%nat (DFT p)) with (map(fun x => (2^n)%nat * x)p).
   assert(forall a, map (fun x : C => / (2^n)%nat * x) (map (fun x : C => (2^n)%nat * x) p)`_a = p`_a).
    { 
     intros.
@@ -2180,7 +2185,7 @@ intros.
     lia. }
   apply nth_eq in H0; auto.
   repeat rewrite -> map_length. auto.
-  rewrite -> evals_map_inversed.
+  rewrite -> eval_powers_map_inversed.
   f_equal.
   apply functional_extensionality.
   intros.
@@ -2193,7 +2198,7 @@ Qed.
  
 Definition iDFT(p: dense_poly) :=
  let n := length p in
-  map(fun x => /n * x)((evals(/ \w_n)) (n)%nat p).
+  map(fun x => /n * x)((eval_powers(/ \w_n)) (n)%nat p).
 
 Lemma iDFT_correct: forall p n,
 length p = (2^n)%nat -> 
@@ -2203,7 +2208,7 @@ intros.
 unfold iDFT.
 assert(length(DFT p) = length p).
   { unfold DFT.
-    rewrite -> evals_length_eq_n.
+    rewrite -> eval_powers_length_eq_n.
     pose proof pow_le_1.
     specialize H0 with (n:= n).
     lia. }
@@ -2289,7 +2294,7 @@ Proof.
   (* length of fft*)
   rewrite -> fft_correct by auto.
   unfold DFT.
-  rewrite -> evals_length_eq_n.
+  rewrite -> eval_powers_length_eq_n.
   rewrite -> H.
   ring_simplify.
   lia.
@@ -2463,10 +2468,10 @@ induction n.
     apply IHn.
 Qed.
 
-Lemma nth_mul_evals: forall a p1 p2 n w,
+Lemma nth_mul_eval_powers: forall a p1 p2 n w,
 Nat.lt a n -> 
-nth a (pointwise_mul'(evals w n p1) (evals w n p2) n) 0 = 
-nth a (evals w n (pmul p1 p2)) 0.
+nth a (pointwise_mul'(eval_powers w n p1) (eval_powers w n p2) n) 0 = 
+nth a (eval_powers w n (pmul p1 p2)) 0.
 Proof.
 intros.
 induction n.
@@ -2478,44 +2483,44 @@ induction n.
     +     rewrite -> pointwise_mul_add.
           repeat rewrite -> app_nth1.
           apply IHn. lia.
-          all: try rewrite -> evals_length_eq_n. 
+          all: try rewrite -> eval_powers_length_eq_n. 
           all: try rewrite -> pointwise_mul_length.
           all: try lia.
-          rewrite -> evals_length_eq_n; auto.
+          rewrite -> eval_powers_length_eq_n; auto.
     (* case a = S n *)
     +     assert(a = length((pointwise_mul'
-         (evals w n p1 ++ complex_eval p1 (w ^ n) :: nil)
-         (evals w n p2 ++ complex_eval p2 (w ^ n) :: nil) n))).
+         (eval_powers w n p1 ++ complex_eval p1 (w ^ n) :: nil)
+         (eval_powers w n p2 ++ complex_eval p2 (w ^ n) :: nil) n))).
           rewrite -> pointwise_mul_length; auto.
           rewrite -> H0. rewrite -> nth_middle.
           rewrite <- H0.
-          replace a with (length(evals w n (pmul p1 p2))) by
-          (rewrite -> evals_length_eq_n; lia).
+          replace a with (length(eval_powers w n (pmul p1 p2))) by
+          (rewrite -> eval_powers_length_eq_n; lia).
           rewrite -> nth_middle.
           rewrite <- pmul_correct.
           rewrite -> pointwise_mul_length in H0.
           repeat rewrite -> app_nth2.
-          all: repeat rewrite -> evals_length_eq_n.
+          all: repeat rewrite -> eval_powers_length_eq_n.
           replace(n-n)%nat with O by lia.
           simpl. auto.
           all: lia.
 Qed.
 
-Lemma mul_evals: forall p1 p2 w n,
-pointwise_mul'(evals w n p1)(evals w n p2) n =
-evals w n (pmul p1 p2).
+Lemma mul_eval_powers: forall p1 p2 w n,
+pointwise_mul'(eval_powers w n p1)(eval_powers w n p2) n =
+eval_powers w n (pmul p1 p2).
 Proof.
 intros.
-assert(length (pointwise_mul' (evals w n p1) (evals w n p2) n) = length(evals w n (pmul p1 p2))) by 
+assert(length (pointwise_mul' (eval_powers w n p1) (eval_powers w n p2) n) = length(eval_powers w n (pmul p1 p2))) by 
 (rewrite -> pointwise_mul_length;
- rewrite -> evals_length_eq_n; auto).
+ rewrite -> eval_powers_length_eq_n; auto).
 apply nth_eq.
 auto.
 apply lt_to_all_nth.
 auto.
 intros.
 rewrite -> pointwise_mul_length in H0.
-apply nth_mul_evals; lia.
+apply nth_mul_eval_powers; lia.
 Qed.
 
 Definition pad(p:dense_poly) (n:nat) :=
@@ -2568,10 +2573,10 @@ repeat rewrite <- eval_zeroes_end.
 apply pmul_correct.
 Qed.
 
-Lemma evals_pmul_padded: forall n j p1 p2 a b,
-evals n j (pmul(pad p1 a)(pad p2 a))
+Lemma eval_powers_pmul_padded: forall n j p1 p2 a b,
+eval_powers n j (pmul(pad p1 a)(pad p2 a))
 =
-evals n j (pad (pmul p1 p2) b). 
+eval_powers n j (pad (pmul p1 p2) b). 
 Proof.
 induction j.
   - intros. simpl.
@@ -2745,13 +2750,13 @@ Proof.
   unfold DFT.
   replace(length (pad p1 (2 ^ n))) with (2^S n)%nat.
   replace(length (pad p2 (2 ^ n))) with (2^S n)%nat.
-  rewrite -> mul_evals.
-  rewrite -> evals_pmul_padded with (b:= 1%nat).
-  replace (evals (\w_ (2 ^ S n)) (2 ^ S n) (pad (pmul p1 p2) 1)) with (DFT((pad (pmul p1 p2) 1))).
+  rewrite -> mul_eval_powers.
+  rewrite -> eval_powers_pmul_padded with (b:= 1%nat).
+  replace (eval_powers (\w_ (2 ^ S n)) (2 ^ S n) (pad (pmul p1 p2) 1)) with (DFT((pad (pmul p1 p2) 1))).
   (*
   Definition DFT(p: dense_poly): list C:=
   let n := length p in
-  evals(\w_n) (n-1) p.
+  eval_powers(\w_n) (n-1) p.
   *)
   rewrite <- fft_correct with(n:= S n).
   rewrite -> icorrect.
